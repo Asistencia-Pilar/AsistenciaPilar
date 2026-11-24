@@ -256,6 +256,14 @@
     font-size:12px;font-weight:600;border:1.5px solid transparent;cursor:pointer;font-family:inherit;
   }
   .entry-chip.active{background:#e2f3e8;color:var(--ok);border-color:var(--ok);}
+  .vae-readonly{font-size:15px;font-weight:700;color:var(--ink);}
+  .vae-visitors{margin:6px 0 0;font-size:12.5px;color:var(--ink-soft);}
+  .vae-sel-card{background:var(--paper);border-radius:10px;padding:10px 12px;margin-bottom:12px;}
+  .vae-sel-card p{margin:0;}
+  .vae-sel-name{font-weight:700;font-size:14.5px;}
+  .vae-sel-last{font-size:12.5px;color:var(--ink-soft);margin-top:2px !important;}
+  .vae-chip{padding:9px 14px;font-size:13px;}
+  .vae-chip.active::before{content:"✓ ";}
   .entry-date-options{display:flex;flex-direction:column;gap:8px;}
   .entry-date-btn{
     text-align:left;padding:12px 14px;border-radius:10px;border:1px solid var(--line);
@@ -567,6 +575,31 @@
   </div>
 </div>
 
+<div class="overlay" id="vaeOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>VAE</h2>
+    <div class="field-block">
+      <label>Buscar alma</label>
+      <input type="text" id="vaeSearchInput" placeholder="Escribí un nombre o apellido…" autocomplete="off">
+      <div id="vaeSuggestions" class="entry-suggestions" style="display:none;"></div>
+    </div>
+    <div id="vaeSelectedWrap"></div>
+    <div class="field-block">
+      <label>Fecha del VAE</label>
+      <input type="text" id="vaeDateInput" class="vae-input" inputmode="numeric" placeholder="DD/MM/AA" maxlength="8" autocomplete="off" style="width:100%;">
+      <p id="vaeDateMsg" class="help-text" style="color:var(--danger);"></p>
+    </div>
+    <div class="field-block">
+      <label>Siervos que visitaron</label>
+      <div id="vaeSiervosWrap"></div>
+    </div>
+    <div class="divider"></div>
+    <button class="btn btn-primary" id="saveVaeBtn">Guardar VAE</button>
+    <button class="btn btn-outline" id="closeVaeBtn" style="margin-top:10px;">Cerrar</button>
+  </div>
+</div>
+
 <div class="overlay" id="finalizeConfirmOverlay">
   <div class="sheet" style="max-width:340px;text-align:center;">
     <p style="font-size:16px;font-weight:700;margin:0 0 8px;color:var(--ink);">¿Finalizar carga?</p>
@@ -713,11 +746,14 @@
     'nombre': 'nombre',
     'vae actual': 'vaeActual',
     'vae anterior visita': 'vaeAnterior',
-    'vae anterior visita 1': 'vaeAnterior1'
+    'vae anterior visita 1': 'vaeAnterior1',
+    'siervos actual': 'siervosActual',
+    'siervos anterior visita': 'siervosAnterior',
+    'siervos anterior visita 1': 'siervosAnterior1'
   };
 
   function mapVaeRow(obj){
-    var rec = { apellido:'', nombre:'', vaeActual:'', vaeAnterior:'', vaeAnterior1:'' };
+    var rec = { apellido:'', nombre:'', vaeActual:'', vaeAnterior:'', vaeAnterior1:'', siervosActual:'', siervosAnterior:'', siervosAnterior1:'' };
     Object.keys(obj).forEach(function(key){
       var target = VAE_HEADER_MAP[key];
       if (target) rec[target] = (obj[key] || '').toString().trim();
@@ -1304,6 +1340,8 @@
     if (openEntry){ openEntryOverlay('general'); return; }
     var openEntryJuv = e.target.closest('#openEntryJuventudBtn');
     if (openEntryJuv){ openEntryOverlay('juventud'); return; }
+    var openVae = e.target.closest('#openVaeBtn');
+    if (openVae){ openVaeOverlay(); return; }
   });
 
   // ---------- Cargar asistencia (Presente / Ausente / etc. desde la app) ----------
@@ -1721,6 +1759,7 @@
       countLine.textContent = state.data.length + ' almas en el directorio · escribí para buscar';
       container.innerHTML = '<button type="button" class="btn btn-primary" id="openEntryBtn" style="margin-bottom:10px;">📋 Cargar Asistencia</button>' +
         '<button type="button" class="btn btn-outline" id="openEntryJuventudBtn" style="margin-bottom:14px;">🎤 Sermón de Juventud</button>' +
+        '<button type="button" class="btn btn-outline" id="openVaeBtn" style="margin-bottom:14px;">VAE</button>' +
         renderActiveDateTotal() + renderBirthdaysCard() + renderCongregationSummary() + renderYearSummary();
       return;
     }
@@ -1855,11 +1894,10 @@
       '<div class="vae-block' + (isVaeOverdue(p.vae) ? ' overdue' : (p.vae ? ' ok' : ' empty')) + '">' +
         '<span class="vae-label">VAE</span>' +
         '<div class="vae-input-wrap">' +
-          '<input class="vae-input" type="text" inputmode="numeric" placeholder="DD/MM/AA" maxlength="8" ' +
-            'data-id="' + p.id + '" value="' + escapeHtml(p.vae || '') + '">' +
-          '<span class="vae-status" data-status-for="' + p.id + '">' + (p.vae ? '' : 'Aún no se realizó VAE') + '</span>' +
+          '<span class="vae-readonly">' + (p.vae ? escapeHtml(p.vae) : 'Aún no se realizó VAE') + '</span>' +
         '</div>' +
       '</div>' +
+      (p.vae && p.vaeSiervos ? '<p class="vae-visitors">Visitaron: ' + escapeHtml(p.vaeSiervos) + '</p>' : '') +
       '<button type="button" class="vae-history-toggle" data-id="' + p.id + '">Ver historial de VAE</button>' +
       '<div class="vae-history" data-history-for="' + p.id + '" style="display:none;"></div>' +
       (p.asistenciaHistorial ? (
@@ -1879,8 +1917,8 @@
   // ---------- VAE date field (DD/MM/AA) ----------
   function renderHistoryList(record){
     var entries = [];
-    if (record.vaeAnterior) entries.push({ label: 'Visita anterior', value: record.vaeAnterior });
-    if (record.vaeAnterior1) entries.push({ label: 'Visita anterior a esa', value: record.vaeAnterior1 });
+    if (record.vaeAnterior) entries.push({ label: 'Visita anterior' + (record.vaeSiervosAnt ? ': ' + record.vaeSiervosAnt : ''), value: record.vaeAnterior });
+    if (record.vaeAnterior1) entries.push({ label: 'Visita anterior a esa' + (record.vaeSiervosAnt1 ? ': ' + record.vaeSiervosAnt1 : ''), value: record.vaeAnterior1 });
     if (!entries.length) return '<p class="vae-history-empty">Sin VAE anteriores registrados.</p>';
     return '<ul class="vae-history-list">' + entries.map(function(en){
       return '<li><span class="vh-date">' + escapeHtml(en.value) + '</span>' +
@@ -2058,82 +2096,137 @@
     if (el){ el.textContent = text; el.className = 'vae-status' + (cls ? ' ' + cls : ''); }
   }
 
-  function saveVae(id, value){
-    var record = state.data.filter(function(p){ return String(p.id) === String(id); })[0];
-    if (!record) return;
-    var oldVae = record.vae || '';
-    if (oldVae !== value){
-      record.vaeAnterior1 = record.vaeAnterior || '';
-      record.vaeAnterior = oldVae;
+  // ---------- Carga de VAE (botón en pantalla principal) ----------
+  var vaeSelected = null;      // persona elegida
+  var vaeSiervosList = [];     // lista de la hoja SiervosVAE
+  var vaeSiervosChosen = {};   // nombre -> true
+
+  function loadVaeSiervos(){
+    var scriptUrl = localStorage.getItem(LS_SCRIPT_URL);
+    try { vaeSiervosList = JSON.parse(localStorage.getItem('directorio_vae_siervos') || '[]'); } catch(e){ vaeSiervosList = []; }
+    if (!scriptUrl) return Promise.resolve();
+    var url = scriptUrl + (scriptUrl.indexOf('?') === -1 ? '?' : '&') + 'sheet=SiervosVAE';
+    return fetch(url, {cache:'no-store'}).then(function(r){ if (!r.ok) throw 0; return r.text(); }).then(function(text){
+      var list = csvToObjects(text).map(function(o){
+        return (o['siervo'] || o['nombre'] || o[Object.keys(o)[0]] || '').toString().trim();
+      }).filter(Boolean);
+      if (list.length){
+        vaeSiervosList = list;
+        localStorage.setItem('directorio_vae_siervos', JSON.stringify(list));
+      }
+    }).catch(function(){});
+  }
+
+  function renderVaeSiervos(){
+    var box = document.getElementById('vaeSiervosWrap');
+    if (!vaeSiervosList.length){
+      box.innerHTML = '<p class="help-text">No hay siervos cargados. Creá la hoja "SiervosVAE" en Google Sheets (columna "Siervo").</p>';
+      return;
     }
+    box.innerHTML = '<div class="entry-chips-row">' + vaeSiervosList.map(function(n, i){
+      return '<button type="button" class="entry-chip vae-chip' + (vaeSiervosChosen[n] ? ' active' : '') + '" data-i="' + i + '">' + escapeHtml(n) + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function renderVaeSelected(){
+    var wrap = document.getElementById('vaeSelectedWrap');
+    if (!vaeSelected){ wrap.innerHTML = ''; return; }
+    wrap.innerHTML = '<div class="vae-sel-card"><p class="vae-sel-name">' + escapeHtml(vaeSelected.nombreApellido) + '</p>' +
+      '<p class="vae-sel-last">' + (vaeSelected.vae ? 'Último VAE: ' + escapeHtml(vaeSelected.vae) : 'Aún no se realizó VAE') + '</p></div>';
+  }
+
+  function openVaeOverlay(){
+    vaeSelected = null; vaeSiervosChosen = {};
+    document.getElementById('vaeSearchInput').value = '';
+    document.getElementById('vaeSuggestions').style.display = 'none';
+    document.getElementById('vaeDateInput').value = '';
+    document.getElementById('vaeDateInput').classList.remove('invalid');
+    document.getElementById('vaeDateMsg').textContent = '';
+    renderVaeSelected();
+    loadVaeSiervos().then(renderVaeSiervos);
+    renderVaeSiervos();
+    document.getElementById('vaeOverlay').classList.add('show');
+    setTimeout(function(){ document.getElementById('vaeSearchInput').focus(); }, 50);
+  }
+  document.getElementById('closeVaeBtn').addEventListener('click', function(){
+    document.getElementById('vaeOverlay').classList.remove('show');
+  });
+
+  document.getElementById('vaeSearchInput').addEventListener('input', function(){
+    var q = normalize(this.value);
+    var box = document.getElementById('vaeSuggestions');
+    if (!q){ box.style.display = 'none'; return; }
+    var m = state.data.filter(function(p){ return normalize(p.nombreApellido).indexOf(q) !== -1; }).slice(0, 8);
+    box.innerHTML = m.length ? m.map(function(p){
+      return '<button type="button" class="entry-suggestion-item" data-id="' + p.id + '"><span class="entry-suggestion-name">' + escapeHtml(p.nombreApellido) + '</span></button>';
+    }).join('') : '<div class="entry-suggestion-empty">Sin resultados</div>';
+    box.style.display = 'block';
+  });
+  document.getElementById('vaeSuggestions').addEventListener('click', function(e){
+    var item = e.target.closest('.entry-suggestion-item');
+    if (!item) return;
+    vaeSelected = state.data.filter(function(p){ return String(p.id) === item.getAttribute('data-id'); })[0] || null;
+    document.getElementById('vaeSuggestions').style.display = 'none';
+    document.getElementById('vaeSearchInput').value = '';
+    renderVaeSelected();
+  });
+  document.getElementById('vaeSiervosWrap').addEventListener('click', function(e){
+    var chip = e.target.closest('.vae-chip');
+    if (!chip) return;
+    var n = vaeSiervosList[parseInt(chip.getAttribute('data-i'), 10)];
+    vaeSiervosChosen[n] = !vaeSiervosChosen[n];
+    chip.classList.toggle('active', !!vaeSiervosChosen[n]);
+  });
+  document.getElementById('vaeDateInput').addEventListener('input', function(){
+    var el = this;
+    el.value = formatVaeDigits(el.value.replace(/[^0-9]/g, '').slice(0, 6));
+    el.classList.remove('invalid');
+    document.getElementById('vaeDateMsg').textContent = '';
+  });
+
+  document.getElementById('saveVaeBtn').addEventListener('click', function(){
+    var dateEl = document.getElementById('vaeDateInput');
+    var msg = document.getElementById('vaeDateMsg');
+    if (!vaeSelected){ toast('Buscá y elegí una persona'); return; }
+    var check = isValidVaeDate(dateEl.value);
+    if (!check.ok){
+      dateEl.classList.add('invalid');
+      msg.textContent = check.reason === 'futuro' ? 'Fecha posterior a hoy, no válida' : 'Formato DD/MM/AA';
+      return;
+    }
+    var siervos = vaeSiervosList.filter(function(n){ return vaeSiervosChosen[n]; });
+    if (!siervos.length){ toast('Elegí al menos un siervo que visitó'); return; }
+    saveVae(vaeSelected, dateEl.value, siervos);
+  });
+
+  function saveVae(record, value, siervos){
+    var siervosTxt = siervos.join(', ');
+    record.vaeAnterior1 = record.vaeAnterior || '';
+    record.vaeSiervosAnt1 = record.vaeSiervosAnt || '';
+    record.vaeAnterior = record.vae || '';
+    record.vaeSiervosAnt = record.vaeSiervos || '';
     record.vae = value;
+    record.vaeSiervos = siervosTxt;
     localStorage.setItem(LS_DATA, JSON.stringify(state.data));
+    renderResults();
     refreshOpenHistoryPanels();
 
     var scriptUrl = localStorage.getItem(LS_SCRIPT_URL);
+    var close = function(){ document.getElementById('vaeOverlay').classList.remove('show'); };
     if (!scriptUrl){
-      setVaeStatus(id, 'guardado local', 'ok');
-      toast('Guardado en este celular. Configurá el link de Google Sheets para compartirlo con los demás.');
-      return;
+      toast('Guardado en este celular. Configurá el link de Google Sheets para compartirlo.');
+      close(); return;
     }
-    setVaeStatus(id, 'guardando…', '');
+    toast('Guardando VAE…');
     fetch(scriptUrl, {
       method: 'POST',
       headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({ apellido: record.apellido, nombre: record.nombre, vae: value })
+      body: JSON.stringify({ action: 'saveVae', apellido: record.apellido, nombre: record.nombre, vae: value, siervos: siervos })
     }).then(function(r){ return r.json(); }).then(function(res){
-      if (res && res.ok){
-        setVaeStatus(id, 'sincronizado', 'ok');
-      } else {
-        setVaeStatus(id, 'no se pudo compartir', 'err');
-      }
-    }).catch(function(){
-      setVaeStatus(id, 'sin conexión', 'err');
-    });
+      toast(res && res.ok ? 'VAE guardado' : 'No se pudo compartir el VAE');
+      close();
+    }).catch(function(){ toast('Sin conexión: VAE guardado solo en este celular'); close(); });
   }
-
-  document.getElementById('results').addEventListener('input', function(e){
-    var el = e.target;
-    if (!el.classList.contains('vae-input')) return;
-    var digits = el.value.replace(/[^0-9]/g, '').slice(0, 6);
-    var caretWasAtEnd = el.selectionStart === el.value.length;
-    el.value = formatVaeDigits(digits);
-    el.classList.remove('invalid');
-    setVaeStatus(el.getAttribute('data-id'), '');
-    if (caretWasAtEnd) el.setSelectionRange(el.value.length, el.value.length);
-  });
-
-  document.getElementById('results').addEventListener('blur', function(e){
-    var el = e.target;
-    if (!el.classList.contains('vae-input')) return;
-    var id = el.getAttribute('data-id');
-    var block = el.closest('.vae-block');
-    if (el.value === ''){
-      el.classList.remove('invalid');
-      if (block){ block.classList.remove('overdue', 'ok'); block.classList.add('empty'); }
-      setVaeStatus(id, 'Aún no se realizó VAE');
-      saveVae(id, '');
-      return;
-    }
-    var check = isValidVaeDate(el.value);
-    if (!check.ok){
-      el.classList.add('invalid');
-      if (check.reason === 'futuro'){
-        setVaeStatus(id, 'fecha posterior a la fecha del día, no válida', 'err');
-      } else {
-        setVaeStatus(id, 'formato DD/MM/AA', 'err');
-      }
-      return;
-    }
-    el.classList.remove('invalid');
-    if (block){
-      var overdueNow = isVaeOverdue(el.value);
-      block.classList.remove('empty');
-      block.classList.toggle('overdue', overdueNow);
-      block.classList.toggle('ok', !overdueNow);
-    }
-    saveVae(id, el.value);
-  }, true);
 
   // ---------- Data loading / sync ----------
   function setData(records, source){
@@ -2210,6 +2303,9 @@
         p.vae = match ? (match.vaeActual || '') : (p.vae || '');
         p.vaeAnterior = match ? (match.vaeAnterior || '') : (p.vaeAnterior || '');
         p.vaeAnterior1 = match ? (match.vaeAnterior1 || '') : (p.vaeAnterior1 || '');
+        p.vaeSiervos = match ? (match.siervosActual || '') : (p.vaeSiervos || '');
+        p.vaeSiervosAnt = match ? (match.siervosAnterior || '') : (p.vaeSiervosAnt || '');
+        p.vaeSiervosAnt1 = match ? (match.siervosAnterior1 || '') : (p.vaeSiervosAnt1 || '');
       });
       localStorage.setItem(LS_DATA, JSON.stringify(state.data));
       renderResults();
