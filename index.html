@@ -256,6 +256,11 @@
     font-size:12px;font-weight:600;border:1.5px solid transparent;cursor:pointer;font-family:inherit;
   }
   .entry-chip.active{background:#e2f3e8;color:var(--ok);border-color:var(--ok);}
+  .pchips{display:flex;flex-wrap:wrap;gap:6px;margin:-2px 0 10px;}
+  .pchip{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--line);}
+  .pchip-ju{background:var(--navy);color:#fff;border-color:var(--navy);text-shadow:0 0 2px #000;}
+  .pchip-ni{background:#fdf1dc;color:#7a4b0c;border-color:#efc983;}
+  .pchip-ta{background:var(--paper);color:var(--ink-soft);}
   .vae-readonly{font-size:15px;font-weight:700;color:var(--ink);}
   .vae-visitors{flex-basis:100%;margin:0;font-size:12.5px;color:var(--ink-soft);}
   .vae-sel-card{background:var(--paper);border-radius:10px;padding:10px 12px;margin-bottom:12px;}
@@ -735,11 +740,13 @@
     'vae': 'vae',
     'juventud': 'juventud',
     'tareas': 'tareas',
-    'tarea': 'tareas'
+    'tarea': 'tareas',
+    'nivel ensenanza': 'nivelEnsenanza',
+    'nivel de ensenanza': 'nivelEnsenanza'
   };
 
   function mapRow(obj){
-    var rec = { nombreApellido:'', apellido:'', nombre:'', fechaNacimiento:'', edad:'', localidad:'', email:'', telefonoFijo:'', celular:'', direccion:'', vae:'', juventud:'', tareas:'' };
+    var rec = { nombreApellido:'', apellido:'', nombre:'', fechaNacimiento:'', edad:'', localidad:'', email:'', telefonoFijo:'', celular:'', direccion:'', vae:'', juventud:'', tareas:'', nivelEnsenanza:'' };
     Object.keys(obj).forEach(function(key){
       var target = HEADER_MAP[key];
       if (target) rec[target] = (obj[key] || '').toString().trim();
@@ -1902,6 +1909,7 @@
     return '<div class="card">' +
       '<p class="card-name">' + escapeHtml(p.nombreApellido) + '</p>' +
       (sub ? '<p class="card-sub">' + escapeHtml(sub) + '</p>' : '') +
+      renderPersonChips(p) +
       grupoBlock +
       attendanceBlock +
       '<div class="vae-block' + (isVaeOverdue(p.vae) ? ' overdue' : (p.vae ? ' ok' : ' empty')) + '">' +
@@ -1926,6 +1934,15 @@
         fieldHtml('Dirección', p.direccion, {maps:true}) +
       '</div>' +
     '</div>';
+  }
+
+  // ---------- Etiquetas (Juventud, Nivel de enseñanza, Tareas) ----------
+  function renderPersonChips(p){
+    var chips = [];
+    if (isJuventud(p)) chips.push('<span class="pchip pchip-ju">Juventud</span>');
+    if (p.nivelEnsenanza) chips.push('<span class="pchip pchip-ni">' + escapeHtml(p.nivelEnsenanza) + '</span>');
+    personTareas(p).forEach(function(t){ chips.push('<span class="pchip pchip-ta">' + escapeHtml(t) + '</span>'); });
+    return chips.length ? '<div class="pchips">' + chips.join('') + '</div>' : '';
   }
 
   // ---------- VAE date field (DD/MM/AA) ----------
@@ -2231,6 +2248,7 @@
       msg.textContent = check.reason === 'futuro' ? 'Fecha posterior a hoy, no válida' : 'Formato DD/MM/AA';
       return;
     }
+    if (document.getElementById('vaeExtraInput').value.trim()) addVaeExtra(); // si escribió un nombre y no tocó Agregar
     var siervos = allVaeNames().filter(function(n){ return vaeSiervosChosen[n]; });
     if (!siervos.length){ toast('Elegí al menos un siervo que visitó'); return; }
     saveVae(vaeSelected, dateEl.value, siervos, document.getElementById('vaeCommentInput').value.trim().slice(0, 100));
