@@ -563,6 +563,12 @@
       <input type="text" id="entryCommentInput" placeholder="Motivo (opcional)" style="display:none;margin-top:8px;" autocomplete="off">
     </div>
 
+    <div class="field-block" id="entryTipoBlock">
+      <label>Tipo de SD</label>
+      <div id="entryTipoChips" class="entry-chips-row"></div>
+      <p id="entryTipoMsg" class="help-text" style="color:var(--danger);display:none;"></p>
+    </div>
+
     <div class="field-block">
       <label>Buscar alma</label>
       <input type="text" id="entrySearchInput" placeholder="Escribí un nombre o apellido…" autocomplete="off">
@@ -742,7 +748,9 @@
     'tareas': 'tareas',
     'tarea': 'tareas',
     'nivel ensenanza': 'nivelEnsenanza',
-    'nivel de ensenanza': 'nivelEnsenanza'
+    'nivel de ensenanza': 'nivelEnsenanza',
+    'nivel ensenaza': 'nivelEnsenanza',
+    'nivel': 'nivelEnsenanza'
   };
 
   function mapRow(obj){
@@ -1106,7 +1114,8 @@
       });
     });
 
-    var sub = active.comentario ? active.label + ' · ' + active.comentario : active.label;
+    var shownLabel = active.tipo || active.label;
+    var sub = active.comentario ? shownLabel + ' · ' + active.comentario : shownLabel;
     return '<button type="button" class="active-date-banner" data-fecha="' + escapeHtml(active.fecha) + '">' +
       '<div>' +
         '<p class="adb-label">Resumen de asistencia de</p>' +
@@ -1410,7 +1419,57 @@
     selectEntryDateKind(options[0].kind, options[0].date);
   }
 
+  var entryTipoKey = 'sd';            // sd | navidad | difuntos | agradecimiento
+  var entryDateKind = 'sunday';
+  var entryNavidadConfirmed = false;  // Navidad exige tocar/cargar la fecha
+
+  function entryTipoLabel(key){
+    if (key === 'navidad') return 'SD Navidad';
+    if (key === 'difuntos') return 'SD Difuntos';
+    if (key === 'agradecimiento') return 'SD Agradecimiento';
+    return 'SD ' + ((entrySelectedDate && entrySelectedDate.label) || '').trim();
+  }
+
+  function renderEntryTipo(){
+    var block = document.getElementById('entryTipoBlock');
+    block.style.display = entryMode === 'juventud' ? 'none' : 'block';
+    var keys = ['sd', 'navidad', 'difuntos', 'agradecimiento'];
+    document.getElementById('entryTipoChips').innerHTML = keys.map(function(k){
+      return '<button type="button" class="entry-chip' + (entryTipoKey === k ? ' active' : '') + '" data-tipo="' + k + '">' + escapeHtml(entryTipoLabel(k)) + '</button>';
+    }).join('');
+    var msg = document.getElementById('entryTipoMsg');
+    var need = entryTipoKey === 'navidad' && !entryNavidadConfirmed;
+    msg.style.display = need ? 'block' : 'none';
+    msg.textContent = need ? 'Elegí la fecha del SD de Navidad para poder guardar.' : '';
+  }
+
+  function entryTipoBlocks(){
+    if (entryMode === 'juventud') return false;
+    if (entryTipoKey === 'navidad' && !entryNavidadConfirmed){
+      renderEntryTipo();
+      toast('Elegí la fecha del SD de Navidad');
+      return true;
+    }
+    return false;
+  }
+
+  document.getElementById('entryTipoChips').addEventListener('click', function(e){
+    var chip = e.target.closest('.entry-chip');
+    if (!chip) return;
+    var key = chip.getAttribute('data-tipo');
+    entryTipoKey = key;
+    if (key === 'navidad'){
+      entryNavidadConfirmed = false;
+      selectEntryDateKind('other', null);
+    } else if ((key === 'difuntos' || key === 'agradecimiento') && entryDateKind !== 'other'){
+      selectEntryDateKind('sunday', nextDateForWeekday_(0));
+    } else {
+      selectEntryDateKind(entryDateKind, entryDateKind === 'other' ? null : nextDateForWeekday_(entryDateKind === 'sunday' ? 0 : 3));
+    }
+  });
+
   function selectEntryDateKind(kind, dateObj){
+    entryDateKind = kind;
     document.querySelectorAll('.entry-date-btn').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-kind') === kind);
     });
@@ -1435,6 +1494,10 @@
       var label = kind === 'sunday' ? 'Domingo' : 'Miércoles';
       entrySelectedDate = { fecha: toDDMMYY_(dateObj), label: label, comentario: '' };
     }
+    if (entrySelectedDate){
+      entrySelectedDate.tipo = entryMode === 'juventud' ? '' : entryTipoLabel(entryTipoKey);
+    }
+    renderEntryTipo();
     updateActiveEntryDate();
   }
 
@@ -1442,16 +1505,27 @@
     var btn = e.target.closest('.entry-date-btn');
     if (!btn) return;
     var kind = btn.getAttribute('data-kind');
-    if (kind === 'sunday') selectEntryDateKind('sunday', nextDateForWeekday_(0));
-    else if (kind === 'wednesday') selectEntryDateKind('wednesday', nextDateForWeekday_(3));
-    else selectEntryDateKind('other', null);
+    if (kind === 'sunday'){
+      if (entryTipoKey === 'navidad') entryTipoKey = 'sd';
+      selectEntryDateKind('sunday', nextDateForWeekday_(0));
+    } else if (kind === 'wednesday'){
+      if (entryTipoKey !== 'sd') entryTipoKey = 'sd';
+      selectEntryDateKind('wednesday', nextDateForWeekday_(3));
+    } else {
+      if (entryTipoKey === 'difuntos' || entryTipoKey === 'agradecimiento') entryTipoKey = 'sd';
+      selectEntryDateKind('other', null);
+    }
   });
 
   document.getElementById('entryCustomDateInput').addEventListener('change', function(){
+    entryNavidadConfirmed = true;
     selectEntryDateKind('other', null);
   });
   document.getElementById('entryCommentInput').addEventListener('input', function(){
     if (entrySelectedDate) entrySelectedDate.comentario = this.value.trim();
+  });
+  document.getElementById('entryCustomDateInput').addEventListener('input', function(){
+    entryNavidadConfirmed = true;
   });
 
   function updateActiveEntryDate(){
@@ -1467,6 +1541,7 @@
 
   function openEntryOverlay(mode){
     entryMode = mode === 'juventud' ? 'juventud' : 'general';
+    entryTipoKey = 'sd'; entryNavidadConfirmed = false;
     document.getElementById('entryOverlayTitle').textContent = entryMode === 'juventud'
       ? '🎤 Sermón de Juventud'
       : 'Cargar asistencia';
@@ -1490,6 +1565,7 @@
 
   document.getElementById('finalizeEntryBtn').addEventListener('click', function(){
     if (!entrySelectedDate || !entrySelectedDate.fecha){ toast('Elegí una fecha válida'); return; }
+    if (entryTipoBlocks()) return;
     document.getElementById('finalizeConfirmOverlay').classList.add('show');
   });
 
@@ -1519,7 +1595,7 @@
       body: JSON.stringify({
         action: entryMode === 'juventud' ? 'sendCargaSummaryJuventud' : 'sendCargaSummary',
         fecha: entrySelectedDate.fecha,
-        label: entrySelectedDate.label || '',
+        label: (entryMode === 'juventud' ? '' : (entrySelectedDate.tipo || '')) || entrySelectedDate.label || '',
         comentario: entrySelectedDate.comentario || ''
       })
     }).then(function(r){ return r.json(); }).then(function(res){
@@ -1636,8 +1712,12 @@
 
   document.getElementById('saveEntryBtn').addEventListener('click', function(){
     if (!entrySelectedDate || !entrySelectedDate.fecha){ toast('Elegí una fecha válida'); return; }
+    if (entryTipoBlocks()) return;
     var fecha = entrySelectedDate.fecha;
     var comentario = entrySelectedDate.comentario || '';
+    if (entryMode !== 'juventud' && entryTipoKey !== 'sd'){
+      comentario = entrySelectedDate.tipo + (comentario ? ' · ' + comentario : '');
+    }
     var scriptUrl = localStorage.getItem(LS_SCRIPT_URL);
     if (!scriptUrl){ toast('No configuraste el link del Apps Script todavía'); return; }
 
