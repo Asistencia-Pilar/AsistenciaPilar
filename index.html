@@ -1525,7 +1525,11 @@
     if (entrySelectedDate) entrySelectedDate.comentario = this.value.trim();
   });
   document.getElementById('entryCustomDateInput').addEventListener('input', function(){
-    entryNavidadConfirmed = true;
+    var dv = dateInputToDate_(this.value);
+    if (dv && dv.getFullYear() >= 2000){
+      entryNavidadConfirmed = true;
+      selectEntryDateKind('other', null);
+    }
   });
 
   function updateActiveEntryDate(){
