@@ -563,6 +563,8 @@
       <input type="text" id="entryCommentInput" placeholder="Motivo (opcional)" style="display:none;margin-top:8px;" autocomplete="off">
     </div>
 
+    <div id="entryVisitaInfo" class="vae-sel-card" style="display:none;"></div>
+
     <div class="field-block" id="entryTipoBlock">
       <label>Tipo de SD</label>
       <div id="entryTipoChips" class="entry-chips-row"></div>
@@ -618,6 +620,31 @@
     <div class="divider"></div>
     <button class="btn btn-primary" id="saveVaeBtn">Guardar VAE</button>
     <button class="btn btn-outline" id="closeVaeBtn" style="margin-top:10px;">Cerrar</button>
+  </div>
+</div>
+
+<div class="overlay" id="visitaChoiceOverlay">
+  <div class="sheet" style="max-width:340px;text-align:center;">
+    <p style="font-size:17px;font-weight:700;margin:0 0 8px;color:var(--ink);">¿Hubo visita o rueda?</p>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin:0 0 18px;line-height:1.5;">Si nos visitan, queda registrado en los mails.</p>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline" id="visitaNoBtn" style="flex:1;">No</button>
+      <button class="btn btn-primary" id="visitaVisitaBtn" style="flex:1;">Visita</button>
+      <button class="btn btn-primary" id="visitaRuedaBtn" style="flex:1;">Rueda</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="visitaFormOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="visitaFormTitle">Datos de la visita</h2>
+    <div id="visitaRows"></div>
+    <button type="button" class="btn btn-outline" id="visitaAddRowBtn" style="margin-top:4px;">+ Agregar otro siervo</button>
+    <p id="visitaFormMsg" class="help-text" style="color:var(--danger);display:none;margin-top:8px;"></p>
+    <div class="divider"></div>
+    <button class="btn btn-primary" id="visitaSaveBtn">Continuar</button>
+    <button class="btn btn-outline" id="visitaCancelBtn" style="margin-top:10px;">Cancelar</button>
   </div>
 </div>
 
@@ -1419,6 +1446,75 @@
     selectEntryDateKind(options[0].kind, options[0].date);
   }
 
+  // ---------- Visita / Rueda ----------
+  var entryVisita = null; // { tipo: 'Visita'|'Rueda', personas: [{nombre, cargo, lugar}] }
+
+  function renderEntryVisitaInfo(){
+    var box = document.getElementById('entryVisitaInfo');
+    if (entryMode === 'juventud' || !entryVisita || !entryVisita.personas.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'block';
+    box.innerHTML = '<p class="vae-sel-name">' + escapeHtml(entryVisita.tipo) + '</p>' +
+      entryVisita.personas.map(function(v){
+        return '<p class="vae-sel-last">' + escapeHtml([v.nombre, v.cargo, v.lugar].filter(Boolean).join(' · ')) + '</p>';
+      }).join('') +
+      '<button type="button" class="vae-history-toggle" id="visitaEditBtn" style="margin-top:6px;">Editar</button>';
+  }
+
+  function visitaRowHtml(v){
+    v = v || {};
+    return '<div class="visita-row" style="background:var(--paper);border-radius:10px;padding:10px;margin-bottom:8px;">' +
+      '<input type="text" class="v-nombre" placeholder="Nombre" value="' + escapeHtml(v.nombre || '') + '" autocomplete="off" style="margin-bottom:6px;">' +
+      '<input type="text" class="v-cargo" placeholder="Cargo" value="' + escapeHtml(v.cargo || '') + '" autocomplete="off" style="margin-bottom:6px;">' +
+      '<input type="text" class="v-lugar" placeholder="Lugar de donde nos visita" value="' + escapeHtml(v.lugar || '') + '" autocomplete="off">' +
+    '</div>';
+  }
+
+  function openVisitaForm(tipo){
+    var current = (entryVisita && entryVisita.tipo === tipo && entryVisita.personas.length) ? entryVisita.personas : [{}];
+    document.getElementById('visitaFormTitle').textContent = tipo === 'Rueda' ? 'Datos de la rueda' : 'Datos de la visita';
+    document.getElementById('visitaFormOverlay').setAttribute('data-tipo', tipo);
+    document.getElementById('visitaRows').innerHTML = current.map(visitaRowHtml).join('');
+    document.getElementById('visitaFormMsg').style.display = 'none';
+    document.getElementById('visitaChoiceOverlay').classList.remove('show');
+    document.getElementById('visitaFormOverlay').classList.add('show');
+  }
+
+  document.getElementById('visitaNoBtn').addEventListener('click', function(){
+    entryVisita = null;
+    document.getElementById('visitaChoiceOverlay').classList.remove('show');
+    renderEntryVisitaInfo();
+  });
+  document.getElementById('visitaVisitaBtn').addEventListener('click', function(){ openVisitaForm('Visita'); });
+  document.getElementById('visitaRuedaBtn').addEventListener('click', function(){ openVisitaForm('Rueda'); });
+  document.getElementById('visitaAddRowBtn').addEventListener('click', function(){
+    document.getElementById('visitaRows').insertAdjacentHTML('beforeend', visitaRowHtml({}));
+  });
+  document.getElementById('visitaCancelBtn').addEventListener('click', function(){
+    document.getElementById('visitaFormOverlay').classList.remove('show');
+    renderEntryVisitaInfo();
+  });
+  document.getElementById('visitaSaveBtn').addEventListener('click', function(){
+    var personas = [];
+    document.querySelectorAll('#visitaRows .visita-row').forEach(function(row){
+      var nombre = row.querySelector('.v-nombre').value.trim();
+      var cargo = row.querySelector('.v-cargo').value.trim();
+      var lugar = row.querySelector('.v-lugar').value.trim();
+      if (nombre || cargo || lugar) personas.push({ nombre: nombre, cargo: cargo, lugar: lugar });
+    });
+    var msg = document.getElementById('visitaFormMsg');
+    if (!personas.length || personas.some(function(v){ return !v.nombre; })){
+      msg.textContent = 'Escribí el nombre de cada siervo que vino.';
+      msg.style.display = 'block';
+      return;
+    }
+    entryVisita = { tipo: document.getElementById('visitaFormOverlay').getAttribute('data-tipo') || 'Visita', personas: personas };
+    document.getElementById('visitaFormOverlay').classList.remove('show');
+    renderEntryVisitaInfo();
+  });
+  document.getElementById('entryVisitaInfo').addEventListener('click', function(e){
+    if (e.target.closest('#visitaEditBtn') && entryVisita) openVisitaForm(entryVisita.tipo);
+  });
+
   var entryTipoKey = 'sd';            // sd | navidad | difuntos | agradecimiento
   var entryDateKind = 'sunday';
   var entryNavidadConfirmed = false;  // Navidad exige tocar/cargar la fecha
@@ -1545,7 +1641,7 @@
 
   function openEntryOverlay(mode){
     entryMode = mode === 'juventud' ? 'juventud' : 'general';
-    entryTipoKey = 'sd'; entryNavidadConfirmed = false;
+    entryTipoKey = 'sd'; entryNavidadConfirmed = false; entryVisita = null;
     document.getElementById('entryOverlayTitle').textContent = entryMode === 'juventud'
       ? '🎤 Sermón de Juventud'
       : 'Cargar asistencia';
@@ -1558,8 +1654,13 @@
     entryGroup = [];
     entrySelectedCodes = {};
     entrySessionSaves = [];
+    renderEntryVisitaInfo();
     document.getElementById('entryOverlay').classList.add('show');
-    setTimeout(function(){ document.getElementById('entrySearchInput').focus(); }, 50);
+    if (entryMode === 'general'){
+      document.getElementById('visitaChoiceOverlay').classList.add('show');
+    } else {
+      setTimeout(function(){ document.getElementById('entrySearchInput').focus(); }, 50);
+    }
   }
   function closeEntryOverlay(){
     document.getElementById('entryOverlay').classList.remove('show');
@@ -1600,7 +1701,8 @@
         action: entryMode === 'juventud' ? 'sendCargaSummaryJuventud' : 'sendCargaSummary',
         fecha: entrySelectedDate.fecha,
         label: (entryMode === 'juventud' ? '' : (entrySelectedDate.tipo || '')) || entrySelectedDate.label || '',
-        comentario: entrySelectedDate.comentario || ''
+        comentario: entrySelectedDate.comentario || '',
+        visita: (entryMode === 'general' && entryVisita) ? entryVisita : null
       })
     }).then(function(r){ return r.json(); }).then(function(res){
       btn.disabled = false;
