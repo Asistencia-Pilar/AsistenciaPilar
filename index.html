@@ -257,7 +257,7 @@
   }
   .entry-chip.active{background:#e2f3e8;color:var(--ok);border-color:var(--ok);}
   .vae-readonly{font-size:15px;font-weight:700;color:var(--ink);}
-  .vae-visitors{margin:6px 0 0;font-size:12.5px;color:var(--ink-soft);}
+  .vae-visitors{flex-basis:100%;margin:0;font-size:12.5px;color:var(--ink-soft);}
   .vae-sel-card{background:var(--paper);border-radius:10px;padding:10px 12px;margin-bottom:12px;}
   .vae-sel-card p{margin:0;}
   .vae-sel-name{font-weight:700;font-size:14.5px;}
@@ -593,6 +593,16 @@
     <div class="field-block">
       <label>Siervos que visitaron</label>
       <div id="vaeSiervosWrap"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <input type="text" id="vaeExtraInput" placeholder="Otro nombre (no está en la lista)" autocomplete="off" style="flex:1;">
+        <button type="button" class="btn btn-outline" id="vaeExtraAddBtn" style="width:auto;padding:0 16px;">Agregar</button>
+      </div>
+      <p class="help-text">Solo queda registrado en este VAE; no se suma a la lista.</p>
+    </div>
+    <div class="field-block">
+      <label>Comentario (opcional)</label>
+      <input type="text" id="vaeCommentInput" maxlength="100" placeholder="Hasta 100 caracteres" autocomplete="off">
+      <p class="help-text" id="vaeCommentCount">0/100</p>
     </div>
     <div class="divider"></div>
     <button class="btn btn-primary" id="saveVaeBtn">Guardar VAE</button>
@@ -749,11 +759,14 @@
     'vae anterior visita 1': 'vaeAnterior1',
     'siervos actual': 'siervosActual',
     'siervos anterior visita': 'siervosAnterior',
-    'siervos anterior visita 1': 'siervosAnterior1'
+    'siervos anterior visita 1': 'siervosAnterior1',
+    'comentario actual': 'comentarioActual',
+    'comentario anterior visita': 'comentarioAnterior',
+    'comentario anterior visita 1': 'comentarioAnterior1'
   };
 
   function mapVaeRow(obj){
-    var rec = { apellido:'', nombre:'', vaeActual:'', vaeAnterior:'', vaeAnterior1:'', siervosActual:'', siervosAnterior:'', siervosAnterior1:'' };
+    var rec = { apellido:'', nombre:'', vaeActual:'', vaeAnterior:'', vaeAnterior1:'', siervosActual:'', siervosAnterior:'', siervosAnterior1:'', comentarioActual:'', comentarioAnterior:'', comentarioAnterior1:'' };
     Object.keys(obj).forEach(function(key){
       var target = VAE_HEADER_MAP[key];
       if (target) rec[target] = (obj[key] || '').toString().trim();
@@ -1896,8 +1909,9 @@
         '<div class="vae-input-wrap">' +
           '<span class="vae-readonly">' + (p.vae ? escapeHtml(p.vae) : 'Aún no se realizó VAE') + '</span>' +
         '</div>' +
+        (p.vae && p.vaeSiervos ? '<p class="vae-visitors">Visitaron: ' + escapeHtml(p.vaeSiervos) + '</p>' : '') +
+        (p.vae && p.vaeComentario ? '<p class="vae-visitors">Comentario: ' + escapeHtml(p.vaeComentario) + '</p>' : '') +
       '</div>' +
-      (p.vae && p.vaeSiervos ? '<p class="vae-visitors">Visitaron: ' + escapeHtml(p.vaeSiervos) + '</p>' : '') +
       '<button type="button" class="vae-history-toggle" data-id="' + p.id + '">Ver historial de VAE</button>' +
       '<div class="vae-history" data-history-for="' + p.id + '" style="display:none;"></div>' +
       (p.asistenciaHistorial ? (
@@ -1917,8 +1931,8 @@
   // ---------- VAE date field (DD/MM/AA) ----------
   function renderHistoryList(record){
     var entries = [];
-    if (record.vaeAnterior) entries.push({ label: 'Visita anterior' + (record.vaeSiervosAnt ? ': ' + record.vaeSiervosAnt : ''), value: record.vaeAnterior });
-    if (record.vaeAnterior1) entries.push({ label: 'Visita anterior a esa' + (record.vaeSiervosAnt1 ? ': ' + record.vaeSiervosAnt1 : ''), value: record.vaeAnterior1 });
+    if (record.vaeAnterior) entries.push({ label: 'Visita anterior' + (record.vaeSiervosAnt ? ': ' + record.vaeSiervosAnt : '') + (record.vaeComentarioAnt ? ' · "' + record.vaeComentarioAnt + '"' : ''), value: record.vaeAnterior });
+    if (record.vaeAnterior1) entries.push({ label: 'Visita anterior a esa' + (record.vaeSiervosAnt1 ? ': ' + record.vaeSiervosAnt1 : '') + (record.vaeComentarioAnt1 ? ' · "' + record.vaeComentarioAnt1 + '"' : ''), value: record.vaeAnterior1 });
     if (!entries.length) return '<p class="vae-history-empty">Sin VAE anteriores registrados.</p>';
     return '<ul class="vae-history-list">' + entries.map(function(en){
       return '<li><span class="vh-date">' + escapeHtml(en.value) + '</span>' +
@@ -2100,6 +2114,7 @@
   var vaeSelected = null;      // persona elegida
   var vaeSiervosList = [];     // lista de la hoja SiervosVAE
   var vaeSiervosChosen = {};   // nombre -> true
+  var vaeExtraNames = [];      // nombres agregados a mano (solo para esta carga)
 
   function loadVaeSiervos(){
     var scriptUrl = localStorage.getItem(LS_SCRIPT_URL);
@@ -2117,13 +2132,15 @@
     }).catch(function(){});
   }
 
+  function allVaeNames(){ return vaeSiervosList.concat(vaeExtraNames); }
+
   function renderVaeSiervos(){
     var box = document.getElementById('vaeSiervosWrap');
-    if (!vaeSiervosList.length){
-      box.innerHTML = '<p class="help-text">No hay siervos cargados. Creá la hoja "SiervosVAE" en Google Sheets (columna "Siervo").</p>';
+    if (!allVaeNames().length){
+      box.innerHTML = '<p class="help-text">No hay siervos cargados. Creá la hoja "SiervosVAE" en Google Sheets (columna "Siervo") o agregá un nombre a mano.</p>';
       return;
     }
-    box.innerHTML = '<div class="entry-chips-row">' + vaeSiervosList.map(function(n, i){
+    box.innerHTML = '<div class="entry-chips-row">' + allVaeNames().map(function(n, i){
       return '<button type="button" class="entry-chip vae-chip' + (vaeSiervosChosen[n] ? ' active' : '') + '" data-i="' + i + '">' + escapeHtml(n) + '</button>';
     }).join('') + '</div>';
   }
@@ -2136,7 +2153,10 @@
   }
 
   function openVaeOverlay(){
-    vaeSelected = null; vaeSiervosChosen = {};
+    vaeSelected = null; vaeSiervosChosen = {}; vaeExtraNames = [];
+    document.getElementById('vaeExtraInput').value = '';
+    document.getElementById('vaeCommentInput').value = '';
+    document.getElementById('vaeCommentCount').textContent = '0/100';
     document.getElementById('vaeSearchInput').value = '';
     document.getElementById('vaeSuggestions').style.display = 'none';
     document.getElementById('vaeDateInput').value = '';
@@ -2173,9 +2193,26 @@
   document.getElementById('vaeSiervosWrap').addEventListener('click', function(e){
     var chip = e.target.closest('.vae-chip');
     if (!chip) return;
-    var n = vaeSiervosList[parseInt(chip.getAttribute('data-i'), 10)];
+    var n = allVaeNames()[parseInt(chip.getAttribute('data-i'), 10)];
     vaeSiervosChosen[n] = !vaeSiervosChosen[n];
     chip.classList.toggle('active', !!vaeSiervosChosen[n]);
+  });
+  document.getElementById('vaeCommentInput').addEventListener('input', function(){
+    document.getElementById('vaeCommentCount').textContent = this.value.length + '/100';
+  });
+  function addVaeExtra(){
+    var inp = document.getElementById('vaeExtraInput');
+    var name = inp.value.replace(/\s+/g, ' ').trim();
+    if (!name) return;
+    var exists = allVaeNames().filter(function(n){ return normalize(n) === normalize(name); })[0];
+    if (exists){ vaeSiervosChosen[exists] = true; }
+    else { vaeExtraNames.push(name); vaeSiervosChosen[name] = true; }
+    inp.value = '';
+    renderVaeSiervos();
+  }
+  document.getElementById('vaeExtraAddBtn').addEventListener('click', addVaeExtra);
+  document.getElementById('vaeExtraInput').addEventListener('keydown', function(e){
+    if (e.key === 'Enter'){ e.preventDefault(); addVaeExtra(); }
   });
   document.getElementById('vaeDateInput').addEventListener('input', function(){
     var el = this;
@@ -2194,17 +2231,20 @@
       msg.textContent = check.reason === 'futuro' ? 'Fecha posterior a hoy, no válida' : 'Formato DD/MM/AA';
       return;
     }
-    var siervos = vaeSiervosList.filter(function(n){ return vaeSiervosChosen[n]; });
+    var siervos = allVaeNames().filter(function(n){ return vaeSiervosChosen[n]; });
     if (!siervos.length){ toast('Elegí al menos un siervo que visitó'); return; }
-    saveVae(vaeSelected, dateEl.value, siervos);
+    saveVae(vaeSelected, dateEl.value, siervos, document.getElementById('vaeCommentInput').value.trim().slice(0, 100));
   });
 
-  function saveVae(record, value, siervos){
+  function saveVae(record, value, siervos, comentario){
     var siervosTxt = siervos.join(', ');
     record.vaeAnterior1 = record.vaeAnterior || '';
     record.vaeSiervosAnt1 = record.vaeSiervosAnt || '';
     record.vaeAnterior = record.vae || '';
     record.vaeSiervosAnt = record.vaeSiervos || '';
+    record.vaeComentarioAnt1 = record.vaeComentarioAnt || '';
+    record.vaeComentarioAnt = record.vaeComentario || '';
+    record.vaeComentario = comentario || '';
     record.vae = value;
     record.vaeSiervos = siervosTxt;
     localStorage.setItem(LS_DATA, JSON.stringify(state.data));
@@ -2221,7 +2261,7 @@
     fetch(scriptUrl, {
       method: 'POST',
       headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action: 'saveVae', apellido: record.apellido, nombre: record.nombre, vae: value, siervos: siervos })
+      body: JSON.stringify({ action: 'saveVae', apellido: record.apellido, nombre: record.nombre, vae: value, siervos: siervos, comentario: comentario || '' })
     }).then(function(r){ return r.json(); }).then(function(res){
       toast(res && res.ok ? 'VAE guardado' : 'No se pudo compartir el VAE');
       close();
@@ -2306,6 +2346,9 @@
         p.vaeSiervos = match ? (match.siervosActual || '') : (p.vaeSiervos || '');
         p.vaeSiervosAnt = match ? (match.siervosAnterior || '') : (p.vaeSiervosAnt || '');
         p.vaeSiervosAnt1 = match ? (match.siervosAnterior1 || '') : (p.vaeSiervosAnt1 || '');
+        p.vaeComentario = match ? (match.comentarioActual || '') : (p.vaeComentario || '');
+        p.vaeComentarioAnt = match ? (match.comentarioAnterior || '') : (p.vaeComentarioAnt || '');
+        p.vaeComentarioAnt1 = match ? (match.comentarioAnterior1 || '') : (p.vaeComentarioAnt1 || '');
       });
       localStorage.setItem(LS_DATA, JSON.stringify(state.data));
       renderResults();
