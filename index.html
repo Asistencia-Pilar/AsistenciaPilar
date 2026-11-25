@@ -1084,25 +1084,36 @@
     if (!entries.length) return '';
 
     var now = new Date();
-    var curMk = ('0' + (now.getMonth() + 1)).slice(-2) + '/' + now.getFullYear().toString().slice(-2);
-    var prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    var prevMk = ('0' + (prevDate.getMonth() + 1)).slice(-2) + '/' + prevDate.getFullYear().toString().slice(-2);
+    var yy = now.getFullYear().toString().slice(-2);
+    var curMonth = now.getMonth() + 1;
 
-    var cards = [curMk, prevMk].map(function(mk){
-      var monthEntries = entries.filter(function(en){ return monthKeyFromFecha(en.fecha) === mk; });
-      var counts = codeCounts(monthEntries);
-      if (!Object.keys(counts).length) return '';
-      return '<div class="summary-month-card clickable-month" data-month="' + mk + '" role="button" tabindex="0">' +
-        '<p class="summary-month-title">' + escapeHtml(monthLabel(mk)) + '</p>' +
-        buildPieSvg(counts, 84) + buildPieLegend(counts) +
-      '</div>';
-    }).join('');
-    if (!cards) return '';
+    var cards = [];
+    for (var m = 1; m <= 12; m++){
+      (function(m){
+        var mk = ('0' + m).slice(-2) + '/' + yy;
+        var monthEntries = entries.filter(function(en){ return monthKeyFromFecha(en.fecha) === mk; });
+        var counts = codeCounts(monthEntries);
+        var isCur = m === curMonth ? ' data-current="1"' : '';
+        if (!Object.keys(counts).length){
+          cards.push('<div class="summary-month-card"' + isCur + ' style="opacity:.55;">' +
+            '<p class="summary-month-title">' + escapeHtml(monthLabel(mk)) + '</p>' +
+            '<p class="vae-history-empty" style="margin:20px 0;">Sin datos</p>' +
+          '</div>');
+          return;
+        }
+        cards.push('<div class="summary-month-card clickable-month" data-month="' + mk + '"' + isCur + ' role="button" tabindex="0">' +
+          '<p class="summary-month-title">' + escapeHtml(monthLabel(mk)) + '</p>' +
+          buildPieSvg(counts, 84) + buildPieLegend(counts) +
+        '</div>');
+      })(m);
+    }
     return '<div class="summary-card">' +
       '<button type="button" class="date-accordion-header birthday-toggle-header" style="width:100%;background:none;padding:0;margin-bottom:0;">' +
-        '<span class="attendance-block-title" style="font-size:14.5px;text-transform:none;">Asistencia de Almas</span>' +
+        '<span class="attendance-block-title" style="font-size:14.5px;text-transform:none;">Asistencia de Almas · ' + (2000 + parseInt(yy, 10)) + '</span>' +
       '</button>' +
-      '<div class="summary-body birthday-list" style="display:none;margin-top:12px;">' + cards + '</div>' +
+      '<div class="birthday-list" style="display:none;margin-top:12px;">' +
+        '<div class="summary-scroll" id="congScroll">' + cards.join('') + '</div>' +
+      '</div>' +
     '</div>';
   }
 
@@ -2512,6 +2523,11 @@
       var bOpen = bList.style.display !== 'none';
       bList.style.display = bOpen ? 'none' : 'block';
       birthdayHeader.classList.toggle('open', !bOpen);
+      if (!bOpen){
+        var cs = bList.querySelector('.summary-scroll');
+        var cur = cs ? cs.querySelector('[data-current="1"]') : null;
+        if (cs && cur) cs.scrollLeft = Math.max(0, cur.offsetLeft - 12);
+      }
       return;
     }
     var dateBanner = e.target.closest('.active-date-banner');
