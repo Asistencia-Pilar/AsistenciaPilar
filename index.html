@@ -660,6 +660,31 @@
   </div>
 </div>
 
+<div class="overlay" id="vaeMenuOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>VAE</h2>
+    <button class="btn btn-primary" id="vaeMenuCargaBtn" style="margin-bottom:10px;">Cargar VAE</button>
+    <button class="btn btn-outline" id="vaeMenuStatsBtn" style="margin-bottom:10px;">Estadísticas VAE</button>
+    <div class="divider"></div>
+    <button class="btn btn-outline" id="vaeMenuCloseBtn">Cerrar</button>
+  </div>
+</div>
+
+<div class="overlay" id="vaeStatsOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Estadísticas VAE</h2>
+    <div id="vaeStatsBody"></div>
+    <div class="st-sec" style="margin-top:18px;">Visitas realizadas</div>
+    <div id="vaeStatsYearPills" class="st-pills"></div>
+    <select id="vaeStatsMonthSelect" style="margin-bottom:8px;"></select>
+    <div id="vaeStatsPeriodBody"></div>
+    <div class="divider"></div>
+    <button class="btn btn-outline" id="vaeStatsCloseBtn">Cerrar</button>
+  </div>
+</div>
+
 <div class="overlay" id="juvMenuOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
@@ -1741,7 +1766,7 @@
     var openStats = e.target.closest('#openStatsBtn');
     if (openStats){ openStatsOverlay(); return; }
     var openVae = e.target.closest('#openVaeBtn');
-    if (openVae){ openVaeOverlay(); return; }
+    if (openVae){ document.getElementById('vaeMenuOverlay').classList.add('show'); return; }
   });
 
   // ---------- Cargar asistencia (Presente / Ausente / etc. desde la app) ----------
@@ -1973,6 +1998,128 @@
   });
   document.getElementById('juvStatsCloseBtn').addEventListener('click', function(){
     document.getElementById('juvStatsOverlay').classList.remove('show');
+  });
+
+  // ---------- Menú VAE y estadísticas VAE ----------
+  var vaeStatsYear = '';
+  var vaeStatsMonth = 'all';
+
+  document.getElementById('vaeMenuCloseBtn').addEventListener('click', function(){
+    document.getElementById('vaeMenuOverlay').classList.remove('show');
+  });
+  document.getElementById('vaeMenuCargaBtn').addEventListener('click', function(){
+    document.getElementById('vaeMenuOverlay').classList.remove('show');
+    openVaeOverlay();
+  });
+  document.getElementById('vaeMenuStatsBtn').addEventListener('click', function(){
+    document.getElementById('vaeMenuOverlay').classList.remove('show');
+    openVaeStats();
+  });
+  document.getElementById('vaeStatsCloseBtn').addEventListener('click', function(){
+    document.getElementById('vaeStatsOverlay').classList.remove('show');
+  });
+
+  function vaeVisits_(){
+    // Une la visita actual y las dos anteriores de cada persona.
+    var list = [];
+    state.data.forEach(function(p){
+      [[p.vae, p.vaeSiervos], [p.vaeAnterior, p.vaeSiervosAnt], [p.vaeAnterior1, p.vaeSiervosAnt1]].forEach(function(pair){
+        if (!pair[0] || !parseHistDate_(pair[0])) return;
+        list.push({ fecha: pair[0], persona: p.nombreApellido, siervos: pair[1] || '' });
+      });
+    });
+    return list;
+  }
+
+  function renderVaeStatusKpis_(){
+    var al = 0, vencidos = [], sin = [];
+    state.data.forEach(function(p){
+      if (!p.vae || !parseHistDate_(p.vae)) sin.push(p.nombreApellido);
+      else if (isVaeOverdue(p.vae)) vencidos.push({ n: p.nombreApellido, f: p.vae });
+      else al++;
+    });
+    vencidos.sort(function(a, b){ return parseHistDate_(a.f) - parseHistDate_(b.f); });
+    sin.sort();
+    var out = '<div class="st-kpis">' +
+      '<div class="st-kpi"><b>' + al + '</b><span>VAE al día (menos de 6 meses)</span></div>' +
+      '<div class="st-kpi"><b>' + vencidos.length + '</b><span>VAE vencido (más de 6 meses)</span></div>' +
+      '<div class="st-kpi"><b>' + sin.length + '</b><span>Sin VAE</span></div>' +
+      '<div class="st-kpi"><b>' + state.data.length + '</b><span>Almas en total</span></div>' +
+    '</div>';
+    if (vencidos.length){
+      out += '<details style="margin-top:12px;"><summary class="st-sec" style="cursor:pointer;margin:0;">Ver quiénes tienen el VAE vencido (' + vencidos.length + ')</summary><table class="st-tb" style="margin-top:8px;">' + vencidos.map(function(v){
+        return '<tr><td>' + escapeHtml(v.n) + '</td><td class="n">' + escapeHtml(v.f) + '</td></tr>';
+      }).join('') + '</table></details>';
+    }
+    if (sin.length){
+      out += '<details style="margin-top:12px;"><summary class="st-sec" style="cursor:pointer;margin:0;">Ver quiénes no tienen VAE (' + sin.length + ')</summary><p class="st-names" style="font-size:12.5px;line-height:1.6;margin-top:8px;">' + sin.map(escapeHtml).join(' · ') + '</p></details>';
+    }
+    return out;
+  }
+
+  function vaeInPeriod_(fecha){
+    var parts = (fecha || '').split('/');
+    if (parts.length !== 3) return false;
+    if (String(2000 + parseInt(parts[2], 10)) !== vaeStatsYear) return false;
+    if (vaeStatsMonth !== 'all' && parseInt(parts[1], 10) !== parseInt(vaeStatsMonth, 10)) return false;
+    return true;
+  }
+
+  function renderVaeStatsControls_(){
+    var years = {};
+    years[String(new Date().getFullYear())] = true;
+    vaeVisits_().forEach(function(v){ years[String(2000 + parseInt(v.fecha.split('/')[2], 10))] = true; });
+    var list = Object.keys(years).sort().reverse();
+    if (!vaeStatsYear || !years[vaeStatsYear]) vaeStatsYear = list[0];
+    document.getElementById('vaeStatsYearPills').innerHTML = list.map(function(y){
+      return '<button type="button" class="st-pill' + (y === vaeStatsYear ? ' active' : '') + '" data-year="' + y + '">' + y + '</button>';
+    }).join('');
+    document.getElementById('vaeStatsMonthSelect').innerHTML = '<option value="all">Todo el año</option>' +
+      MESES_ES_.map(function(m, i){ return '<option value="' + (i + 1) + '">' + m + '</option>'; }).join('');
+    document.getElementById('vaeStatsMonthSelect').value = String(vaeStatsMonth);
+  }
+
+  function renderVaePeriodBody_(){
+    var visits = vaeVisits_().filter(function(v){ return vaeInPeriod_(v.fecha); })
+      .sort(function(a, b){ return parseHistDate_(b.fecha) - parseHistDate_(a.fecha); });
+    var box = document.getElementById('vaeStatsPeriodBody');
+    if (!visits.length){
+      box.innerHTML = '<p class="vae-history-empty">No hay VAE registrados en este período.</p>';
+      return;
+    }
+    var sMap = {};
+    visits.forEach(function(v){
+      v.siervos.split(',').map(function(x){ return x.trim(); }).filter(Boolean).forEach(function(n){
+        sMap[n] = (sMap[n] || 0) + 1;
+      });
+    });
+    var ranking = Object.keys(sMap).map(function(k){ return { n: k, c: sMap[k] }; }).sort(function(a, b){ return b.c - a.c; });
+    var out = '<div class="st-kpis"><div class="st-kpi"><b>' + visits.length + '</b><span>VAE realizados</span></div>' +
+      '<div class="st-kpi"><b>' + ranking.length + '</b><span>Siervos que visitaron</span></div></div>';
+    if (ranking.length){
+      out += '<p class="st-sec">Siervos que más visitaron</p><table class="st-tb">' + ranking.map(function(r){
+        return '<tr><td>' + escapeHtml(r.n) + '</td><td class="n">' + r.c + '</td></tr>';
+      }).join('') + '</table>';
+    }
+    out += '<p class="st-sec">VAE por fecha</p><table class="st-tb"><tr><th>Fecha</th><th>Alma</th></tr>' + visits.map(function(v){
+      return '<tr><td>' + escapeHtml(v.fecha) + '</td><td>' + escapeHtml(v.persona) +
+        (v.siervos ? '<span class="st-names">' + escapeHtml(v.siervos) + '</span>' : '') + '</td></tr>';
+    }).join('') + '</table>';
+    box.innerHTML = out;
+  }
+
+  function openVaeStats(){
+    document.getElementById('vaeStatsBody').innerHTML = renderVaeStatusKpis_();
+    renderVaeStatsControls_();
+    renderVaePeriodBody_();
+    document.getElementById('vaeStatsOverlay').classList.add('show');
+  }
+  document.getElementById('vaeStatsYearPills').addEventListener('click', function(e){
+    var b = e.target.closest('.st-pill'); if (!b) return;
+    vaeStatsYear = b.getAttribute('data-year'); renderVaeStatsControls_(); renderVaePeriodBody_();
+  });
+  document.getElementById('vaeStatsMonthSelect').addEventListener('change', function(){
+    vaeStatsMonth = this.value; renderVaePeriodBody_();
   });
 
   // ---------- Visita / Rueda ----------
