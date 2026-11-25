@@ -695,7 +695,8 @@
     <select id="vaeStatsMonthSelect" style="margin-bottom:8px;"></select>
     <div id="vaeStatsPeriodBody"></div>
     <div class="divider"></div>
-    <button class="btn btn-outline" id="vaeStatsCloseBtn">Cerrar</button>
+    <button class="btn btn-primary" id="vaeStatsSendBtn">Enviar por mail</button>
+    <button class="btn btn-outline" id="vaeStatsCloseBtn" style="margin-top:10px;">Cerrar</button>
   </div>
 </div>
 
@@ -728,7 +729,8 @@
     <select id="juvStatsMonthSelect" style="margin-bottom:8px;"></select>
     <div id="juvStatsBody"></div>
     <div class="divider"></div>
-    <button class="btn btn-outline" id="juvStatsCloseBtn">Cerrar</button>
+    <button class="btn btn-primary" id="juvStatsSendBtn">Enviar por mail</button>
+    <button class="btn btn-outline" id="juvStatsCloseBtn" style="margin-top:10px;">Cerrar</button>
   </div>
 </div>
 
@@ -1863,6 +1865,28 @@
     selectEntryDateKind(options[0].kind, options[0].date);
   }
 
+  // ---------- Envío por mail de estadísticas (Juventud, VAE) ----------
+  function sendStatsGeneric_(btn, payload, label){
+    var scriptUrl = localStorage.getItem(LS_SCRIPT_URL);
+    if (!scriptUrl){ toast('No configuraste el link del Apps Script todavía'); return; }
+    if (!payload){ toast('No hay datos para enviar en este período'); return; }
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    fetch(scriptUrl, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'sendStatsGeneric', stats: payload })
+    }).then(function(r){ return r.json(); }).then(function(res){
+      btn.disabled = false; btn.textContent = 'Enviar por mail';
+      toast(res && res.ok ? 'Estadísticas enviadas por mail' : 'No se pudo enviar el mail');
+    }).catch(function(){
+      btn.disabled = false; btn.textContent = 'Enviar por mail';
+      toast('Sin conexión');
+    });
+  }
+  var lastJuvPayload = null;
+  var lastVaePayload = null;
+  var lastVaeStatus = null;
+
   // ---------- Info Juventud: menú, comunidad del SD y estadísticas ----------
   var entryComunidad = '';
 
@@ -1980,6 +2004,7 @@
   function renderJuvBody(){
     var rows = juvData.filter(function(r){ return juvInPeriod(r.fecha); });
     var box = document.getElementById('juvStatsBody');
+    lastJuvPayload = null;
     if (!rows.length){
       box.innerHTML = '<p class="vae-history-empty">No hay asistencia de Juventud cargada en este período.</p>';
       return;
@@ -2011,6 +2036,18 @@
     fechas.forEach(function(f){ if (f.comunidad) comMap[f.comunidad] = (comMap[f.comunidad] || 0) + 1; });
     var comunidades = Object.keys(comMap).map(function(k){ return { c: k, n: comMap[k] }; }).sort(function(a, b){ return b.n - a.n; });
 
+    lastJuvPayload = {
+      titulo: 'Estadísticas de Juventud',
+      subtitulo: juvYear + (juvMonth !== 'all' ? ' · ' + MESES_ES_[parseInt(juvMonth, 10) - 1] : ' · Todo el año'),
+      kpis: [{ n: fechas.length, label: 'Fechas cargadas' }, { n: prom, label: 'Presentes promedio' }],
+      sections: [
+        { titulo: 'Fechas', headers: ['Fecha', 'P', 'A', 'Otros'], right: [1, 2, 3],
+          rows: fechas.map(function(f){ return [f.fecha + (f.comunidad ? ' (' + f.comunidad + ')' : ''), f.p, f.a, f.otros]; }) },
+        { titulo: 'Asistencia por persona', headers: ['Persona', 'Presente'], right: [1],
+          rows: ranking.map(function(r){ return [r.nombre, r.p + ' de ' + r.total]; }) }
+      ].concat(comunidades.length ? [{ titulo: 'Comunidad del Servicio Divino', headers: ['Comunidad', 'Veces'], right: [1],
+          rows: comunidades.map(function(c){ return [c.c, c.n]; }) }] : [])
+    };
     var out = '<div class="st-kpis">' +
       '<div class="st-kpi"><b>' + fechas.length + '</b><span>Fechas cargadas</span></div>' +
       '<div class="st-kpi"><b>' + prom + '</b><span>Presentes promedio</span></div>' +
@@ -2044,6 +2081,9 @@
   document.getElementById('juvStatsMonthSelect').addEventListener('change', function(){
     juvMonth = this.value; renderJuvBody();
   });
+  document.getElementById('juvStatsSendBtn').addEventListener('click', function(){
+    sendStatsGeneric_(this, lastJuvPayload);
+  });
   document.getElementById('juvStatsCloseBtn').addEventListener('click', function(){
     document.getElementById('juvStatsOverlay').classList.remove('show');
   });
@@ -2062,6 +2102,9 @@
   document.getElementById('vaeMenuStatsBtn').addEventListener('click', function(){
     document.getElementById('vaeMenuOverlay').classList.remove('show');
     openVaeStats();
+  });
+  document.getElementById('vaeStatsSendBtn').addEventListener('click', function(){
+    sendStatsGeneric_(this, lastVaePayload);
   });
   document.getElementById('vaeStatsCloseBtn').addEventListener('click', function(){
     document.getElementById('vaeStatsOverlay').classList.remove('show');
@@ -2088,6 +2131,7 @@
     });
     vencidos.sort(function(a, b){ return parseHistDate_(a.f) - parseHistDate_(b.f); });
     sin.sort();
+    lastVaeStatus = { al: al, vencidos: vencidos, sin: sin };
     var out = '<div class="st-kpis">' +
       '<div class="st-kpi"><b>' + al + '</b><span>VAE al día (menos de 6 meses)</span></div>' +
       '<div class="st-kpi"><b>' + vencidos.length + '</b><span>VAE vencido (más de 6 meses)</span></div>' +
@@ -2131,6 +2175,7 @@
     var visits = vaeVisits_().filter(function(v){ return vaeInPeriod_(v.fecha); })
       .sort(function(a, b){ return parseHistDate_(b.fecha) - parseHistDate_(a.fecha); });
     var box = document.getElementById('vaeStatsPeriodBody');
+    lastVaePayload = null;
     if (!visits.length){
       box.innerHTML = '<p class="vae-history-empty">No hay VAE registrados en este período.</p>';
       return;
@@ -2142,6 +2187,26 @@
       });
     });
     var ranking = Object.keys(sMap).map(function(k){ return { n: k, c: sMap[k] }; }).sort(function(a, b){ return b.c - a.c; });
+    var stv = lastVaeStatus || { al: 0, vencidos: [], sin: [] };
+    lastVaePayload = {
+      titulo: 'Estadísticas VAE',
+      subtitulo: vaeStatsYear + (vaeStatsMonth !== 'all' ? ' · ' + MESES_ES_[parseInt(vaeStatsMonth, 10) - 1] : ' · Todo el año'),
+      kpis: [
+        { n: visits.length, label: 'VAE realizados' },
+        { n: ranking.length, label: 'Siervos que visitaron' },
+        { n: stv.al, label: 'VAE al día (menos de 6 meses)' },
+        { n: stv.vencidos.length, label: 'VAE vencido (más de 6 meses)' },
+        { n: stv.sin.length, label: 'Sin VAE' }
+      ],
+      sections: [
+        { titulo: 'Siervos que más visitaron', headers: ['Siervo', 'Visitas'], right: [1],
+          rows: ranking.map(function(r){ return [r.n, r.c]; }) },
+        { titulo: 'VAE por fecha', headers: ['Fecha', 'Alma'],
+          rows: visits.map(function(v){ return [v.fecha, v.persona + (v.siervos ? '\n' + v.siervos : '') + (v.motivo ? '\nMotivo: ' + v.motivo : '')]; }) }
+      ].concat(stv.vencidos.length ? [{ titulo: 'VAE vencido', headers: ['Alma', 'Último VAE'], right: [1],
+          rows: stv.vencidos.map(function(v){ return [v.n, v.f]; }) }] : [])
+       .concat(stv.sin.length ? [{ titulo: 'Sin VAE (' + stv.sin.length + ')', texto: stv.sin.join(' · ') }] : [])
+    };
     var out = '<div class="st-kpis"><div class="st-kpi"><b>' + visits.length + '</b><span>VAE realizados</span></div>' +
       '<div class="st-kpi"><b>' + ranking.length + '</b><span>Siervos que visitaron</span></div></div>';
     if (ranking.length){
