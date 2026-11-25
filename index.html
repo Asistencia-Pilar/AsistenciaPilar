@@ -2023,9 +2023,9 @@
     // Une la visita actual y las dos anteriores de cada persona.
     var list = [];
     state.data.forEach(function(p){
-      [[p.vae, p.vaeSiervos], [p.vaeAnterior, p.vaeSiervosAnt], [p.vaeAnterior1, p.vaeSiervosAnt1]].forEach(function(pair){
+      [[p.vae, p.vaeSiervos, p.vaeComentario], [p.vaeAnterior, p.vaeSiervosAnt, p.vaeComentarioAnt], [p.vaeAnterior1, p.vaeSiervosAnt1, p.vaeComentarioAnt1]].forEach(function(pair){
         if (!pair[0] || !parseHistDate_(pair[0])) return;
-        list.push({ fecha: pair[0], persona: p.nombreApellido, siervos: pair[1] || '' });
+        list.push({ fecha: pair[0], persona: p.nombreApellido, siervos: pair[1] || '', motivo: pair[2] || '' });
       });
     });
     return list;
@@ -2103,7 +2103,8 @@
     }
     out += '<p class="st-sec">VAE por fecha</p><table class="st-tb"><tr><th>Fecha</th><th>Alma</th></tr>' + visits.map(function(v){
       return '<tr><td>' + escapeHtml(v.fecha) + '</td><td>' + escapeHtml(v.persona) +
-        (v.siervos ? '<span class="st-names">' + escapeHtml(v.siervos) + '</span>' : '') + '</td></tr>';
+        (v.siervos ? '<span class="st-names">' + escapeHtml(v.siervos) + '</span>' : '') +
+        (v.motivo ? '<span class="st-names"><b>Motivo:</b> ' + escapeHtml(v.motivo) + '</span>' : '') + '</td></tr>';
     }).join('') + '</table>';
     box.innerHTML = out;
   }
