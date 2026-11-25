@@ -638,13 +638,15 @@
 <div class="overlay" id="visitaFormOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2 id="visitaFormTitle">Datos de la visita</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <h2 id="visitaFormTitle" style="margin:0;">Datos de la visita</h2>
+      <button type="button" id="visitaCloseBtn" aria-label="Cerrar" style="border:none;background:transparent;font-size:26px;line-height:1;color:var(--ink-soft);cursor:pointer;padding:4px 8px;">&times;</button>
+    </div>
     <div id="visitaRows"></div>
     <button type="button" class="btn btn-outline" id="visitaAddRowBtn" style="margin-top:4px;">+ Agregar otro siervo</button>
     <p id="visitaFormMsg" class="help-text" style="color:var(--danger);display:none;margin-top:8px;"></p>
     <div class="divider"></div>
     <button class="btn btn-primary" id="visitaSaveBtn">Continuar</button>
-    <button class="btn btn-outline" id="visitaCancelBtn" style="margin-top:10px;">Cancelar</button>
   </div>
 </div>
 
@@ -1460,12 +1462,13 @@
       '<button type="button" class="vae-history-toggle" id="visitaEditBtn" style="margin-top:6px;">Editar</button>';
   }
 
-  function visitaRowHtml(v){
+  function visitaRowHtml(v, tipo){
     v = v || {};
+    var inp = 'display:block;width:100%;box-sizing:border-box;margin-bottom:6px;';
     return '<div class="visita-row" style="background:var(--paper);border-radius:10px;padding:10px;margin-bottom:8px;">' +
-      '<input type="text" class="v-nombre" placeholder="Nombre" value="' + escapeHtml(v.nombre || '') + '" autocomplete="off" style="margin-bottom:6px;">' +
-      '<input type="text" class="v-cargo" placeholder="Cargo" value="' + escapeHtml(v.cargo || '') + '" autocomplete="off" style="margin-bottom:6px;">' +
-      '<input type="text" class="v-lugar" placeholder="Lugar de donde nos visita" value="' + escapeHtml(v.lugar || '') + '" autocomplete="off">' +
+      '<input type="text" class="v-nombre" placeholder="Nombre" value="' + escapeHtml(v.nombre || '') + '" autocomplete="off" style="' + inp + '">' +
+      '<input type="text" class="v-cargo" placeholder="Cargo" value="' + escapeHtml(v.cargo || '') + '" autocomplete="off" style="' + inp + (tipo === 'Rueda' ? '' : 'margin-bottom:0;') + '">' +
+      (tipo === 'Rueda' ? '<input type="text" class="v-lugar" placeholder="Lugar de donde nos visita" value="' + escapeHtml(v.lugar || '') + '" autocomplete="off" style="' + inp + 'margin-bottom:0;">' : '') +
     '</div>';
   }
 
@@ -1473,7 +1476,7 @@
     var current = (entryVisita && entryVisita.tipo === tipo && entryVisita.personas.length) ? entryVisita.personas : [{}];
     document.getElementById('visitaFormTitle').textContent = tipo === 'Rueda' ? 'Datos de la rueda' : 'Datos de la visita';
     document.getElementById('visitaFormOverlay').setAttribute('data-tipo', tipo);
-    document.getElementById('visitaRows').innerHTML = current.map(visitaRowHtml).join('');
+    document.getElementById('visitaRows').innerHTML = current.map(function(v){ return visitaRowHtml(v, tipo); }).join('');
     document.getElementById('visitaFormMsg').style.display = 'none';
     document.getElementById('visitaChoiceOverlay').classList.remove('show');
     document.getElementById('visitaFormOverlay').classList.add('show');
@@ -1487,18 +1490,19 @@
   document.getElementById('visitaVisitaBtn').addEventListener('click', function(){ openVisitaForm('Visita'); });
   document.getElementById('visitaRuedaBtn').addEventListener('click', function(){ openVisitaForm('Rueda'); });
   document.getElementById('visitaAddRowBtn').addEventListener('click', function(){
-    document.getElementById('visitaRows').insertAdjacentHTML('beforeend', visitaRowHtml({}));
+    document.getElementById('visitaRows').insertAdjacentHTML('beforeend', visitaRowHtml({}, document.getElementById('visitaFormOverlay').getAttribute('data-tipo')));
   });
-  document.getElementById('visitaCancelBtn').addEventListener('click', function(){
+  document.getElementById('visitaCloseBtn').addEventListener('click', function(){
     document.getElementById('visitaFormOverlay').classList.remove('show');
-    renderEntryVisitaInfo();
+    document.getElementById('visitaChoiceOverlay').classList.add('show');
   });
   document.getElementById('visitaSaveBtn').addEventListener('click', function(){
     var personas = [];
     document.querySelectorAll('#visitaRows .visita-row').forEach(function(row){
       var nombre = row.querySelector('.v-nombre').value.trim();
       var cargo = row.querySelector('.v-cargo').value.trim();
-      var lugar = row.querySelector('.v-lugar').value.trim();
+      var lugarEl = row.querySelector('.v-lugar');
+      var lugar = lugarEl ? lugarEl.value.trim() : '';
       if (nombre || cargo || lugar) personas.push({ nombre: nombre, cargo: cargo, lugar: lugar });
     });
     var msg = document.getElementById('visitaFormMsg');
