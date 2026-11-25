@@ -261,6 +261,20 @@
   .pchip-ju{background:var(--navy);color:#fff;border-color:var(--navy);text-shadow:0 0 2px #000;}
   .pchip-ni{background:#fdf1dc;color:#7a4b0c;border-color:#efc983;}
   .pchip-ta{background:var(--paper);color:var(--ink-soft);}
+  .bday-head{display:flex;flex-direction:column;align-items:flex-start;gap:3px;flex:1;min-width:0;text-align:left;}
+  .bday-sub{font-size:12px;font-weight:600;color:var(--ink-soft);}
+  .bday-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;margin-right:4px;}
+  .summary-card.bday-hoy{background:linear-gradient(90deg,#fff6df,#ffe9b8);border-color:#e8b34a;animation:bdayPulse 1.8s ease-in-out infinite;}
+  .summary-card.bday-hoy .bday-sub{color:#7a4b0c;}
+  .summary-card.bday-hoy .bday-badge{background:#c98a1f;color:#fff;text-shadow:0 0 2px #000;}
+  .summary-card.bday-manana{background:#eaf3fb;border-color:#9cc3e4;}
+  .summary-card.bday-manana .bday-sub{color:var(--navy);}
+  .summary-card.bday-manana .bday-badge{background:var(--navy);color:#fff;text-shadow:0 0 2px #000;}
+  .summary-card.bday-ayer{background:#f1f5ee;border-color:#b9d3a8;}
+  .summary-card.bday-ayer .bday-sub{color:#3b6d11;}
+  .summary-card.bday-ayer .bday-badge{background:#fff;color:#3b6d11;border:1px solid #b9d3a8;}
+  @keyframes bdayPulse{0%,100%{box-shadow:0 0 0 0 rgba(232,179,74,.55);}50%{box-shadow:0 0 0 7px rgba(232,179,74,0);}}
+  @media (prefers-reduced-motion: reduce){ .summary-card.bday-hoy{animation:none;} }
   .home-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
   .home-tile{
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
@@ -1295,7 +1309,21 @@
         isPast: bd.day < currentDay
       });
     });
-    if (!people.length) return '';
+    // Cumpleaños de ayer, hoy y mañana (incluye el cruce de mes y de año)
+    var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var near = { hoy: [], manana: [], ayer: [] };
+    state.data.forEach(function(p){
+      var bd = parseBirthDate(p.fechaNacimiento);
+      if (!bd) return;
+      [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].forEach(function(y){
+        var diff = Math.round((new Date(y, bd.month - 1, bd.day) - today0) / 86400000);
+        if (diff === 0) near.hoy.push(p.nombreApellido);
+        else if (diff === 1) near.manana.push(p.nombreApellido);
+        else if (diff === -1) near.ayer.push(p.nombreApellido);
+      });
+    });
+    var nearKind = near.hoy.length ? 'hoy' : (near.manana.length ? 'manana' : (near.ayer.length ? 'ayer' : ''));
+    if (!people.length && !nearKind) return '';
     people.sort(function(a, b){ return a.day - b.day; });
     var monthName = MONTH_NAMES_[currentMonth - 1];
     var title = 'Cumpleaños de ' + monthName.charAt(0).toUpperCase() + monthName.slice(1);
@@ -1309,9 +1337,29 @@
         '</span>' +
         '<span class="vh-time">' + dayStr + ' · ' + p.age + ' años</span></li>';
     }).join('');
-    return '<div class="summary-card">' +
+    var totalNear = near.hoy.length + near.manana.length + near.ayer.length;
+    var sub = '', badge = '';
+    if (nearKind){
+      var labels = { hoy: ['Hoy cumple', 'Hoy cumplen', 'HOY'], manana: ['Mañana cumple', 'Mañana cumplen', 'MAÑANA'], ayer: ['Cumplió ayer', 'Cumplieron ayer', 'AYER'] };
+      badge = labels[nearKind][2];
+      if (totalNear === 1){
+        sub = labels[nearKind][0] + ': ' + near[nearKind][0];
+      } else {
+        var parts = [];
+        if (near.hoy.length) parts.push('Hoy ' + near.hoy.length);
+        if (near.manana.length) parts.push('Mañana ' + near.manana.length);
+        if (near.ayer.length) parts.push('Ayer ' + near.ayer.length);
+        sub = parts.join(' · ');
+      }
+    }
+    if (!items) items = '<li class="birthday-item"><span class="vh-date">Sin cumpleaños este mes</span></li>';
+    return '<div class="summary-card' + (nearKind ? ' bday-' + nearKind : '') + '">' +
       '<button type="button" class="date-accordion-header birthday-toggle-header" style="width:100%;background:none;padding:0;margin-bottom:0;">' +
-        '<span class="attendance-block-title" style="font-size:14.5px;text-transform:none;">🎂 ' + escapeHtml(title) + '</span>' +
+        '<span class="bday-head">' +
+          '<span class="attendance-block-title" style="font-size:14.5px;text-transform:none;">🎂 ' + escapeHtml(title) + '</span>' +
+          (sub ? '<span class="bday-sub">' + escapeHtml(sub) + '</span>' : '') +
+        '</span>' +
+        (badge ? '<span class="bday-badge">' + badge + '</span>' : '') +
       '</button>' +
       '<ul class="vae-history-list birthday-list" style="display:none;margin-top:12px;">' + items + '</ul>' +
     '</div>';
