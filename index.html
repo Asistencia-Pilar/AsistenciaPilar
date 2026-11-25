@@ -261,6 +261,31 @@
   .pchip-ju{background:var(--navy);color:#fff;border-color:var(--navy);text-shadow:0 0 2px #000;}
   .pchip-ni{background:#fdf1dc;color:#7a4b0c;border-color:#efc983;}
   .pchip-ta{background:var(--paper);color:var(--ink-soft);}
+  .dvstrip{padding:0 14px 10px;background:#fafbfc;display:flex;flex-direction:column;gap:6px;}
+  .dvrow{display:flex;flex-wrap:wrap;gap:6px;}
+  .dvc{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid transparent;}
+  .dvc.v1{background:#e0a23a;color:#412402;}
+  .dvc.v2{background:#fdf1dc;color:#7a4b0c;border-color:#efc983;}
+  .dvc.v3{background:#fff;color:#633806;border-color:#efc983;}
+  .dvc.r1{background:#2c5f85;color:#fff;text-shadow:0 0 2px #000;}
+  .dvc.r2{background:#e6f0fa;color:#2c5f85;border-color:#b9d3ea;}
+  .dvc.r3{background:#fff;color:#0c447c;border-color:#b9d3ea;}
+  .dvc.r4{background:#eaf3de;color:#27500a;border-color:#c0dd97;}
+  .st-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0;}
+  .st-kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+  .st-kpi b{display:block;font-size:22px;color:var(--ink);}
+  .st-kpi span{font-size:11.5px;color:var(--ink-soft);}
+  .st-sec{font-size:12px;font-weight:700;color:var(--navy-2);letter-spacing:.3px;margin:16px 0 6px;text-transform:uppercase;}
+  .st-tb{width:100%;border-collapse:collapse;font-size:12.5px;color:var(--ink);}
+  .st-tb th{text-align:left;font-weight:700;color:var(--ink-soft);font-size:11px;padding:4px;border-bottom:1px solid var(--line);}
+  .st-tb td{padding:6px 4px;border-bottom:1px solid #f0ece0;vertical-align:top;}
+  .st-tb .n{text-align:right;}
+  .st-names{display:block;font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+  .st-bar{height:8px;border-radius:4px;background:#e2e8ee;overflow:hidden;}
+  .st-bar i{display:block;height:100%;background:var(--navy);}
+  .st-pills{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}
+  .st-pill{padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+  .st-pill.active{background:var(--navy);color:#fff;border-color:var(--navy);text-shadow:0 0 2px #000;}
   .vae-readonly{font-size:15px;font-weight:700;color:var(--ink);}
   .vae-visitors{flex-basis:100%;margin:0;font-size:12.5px;color:var(--ink-soft);}
   .vae-sel-card{background:var(--paper);border-radius:10px;padding:10px 12px;margin-bottom:12px;}
@@ -620,6 +645,20 @@
     <div class="divider"></div>
     <button class="btn btn-primary" id="saveVaeBtn">Guardar VAE</button>
     <button class="btn btn-outline" id="closeVaeBtn" style="margin-top:10px;">Cerrar</button>
+  </div>
+</div>
+
+<div class="overlay" id="statsOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Estadísticas</h2>
+    <div id="statsYearPills" class="st-pills"></div>
+    <select id="statsMonthSelect" style="margin-bottom:8px;"></select>
+    <div id="statsTipoPills" class="st-pills"></div>
+    <div id="statsBody"></div>
+    <div class="divider"></div>
+    <button class="btn btn-primary" id="statsSendBtn">Enviar por mail</button>
+    <button class="btn btn-outline" id="statsCloseBtn" style="margin-top:10px;">Cerrar</button>
   </div>
 </div>
 
@@ -1197,6 +1236,250 @@
     '</div>';
   }
 
+  // ---------- Visitas y ruedas (hoja VisitasRueda) ----------
+  var LS_VISITAS = 'directorio_visitas';
+  var visitasData = [];
+  try { visitasData = JSON.parse(localStorage.getItem(LS_VISITAS) || '[]'); } catch(e){ visitasData = []; }
+
+  function parseVisitasCSV(text){
+    if (!text || /^Hoja no encontrada/.test(text)) return [];
+    return csvToObjects(text).map(function(o){
+      return {
+        fecha: (o['fecha'] || '').toString().trim(),
+        sd: (o['tipo sd'] || '').toString().trim(),
+        tipo: (o['tipo'] || '').toString().trim(),
+        nombre: (o['nombre'] || '').toString().trim(),
+        cargo: (o['cargo'] || '').toString().trim(),
+        lugar: (o['lugar'] || '').toString().trim()
+      };
+    }).filter(function(v){ return v.fecha && v.nombre; });
+  }
+
+  function syncVisitasFromUrl(showToast){
+    var scriptUrl = localStorage.getItem(LS_SCRIPT_URL);
+    if (!scriptUrl) return;
+    var url = scriptUrl + (scriptUrl.indexOf('?') === -1 ? '?' : '&') + 'sheet=VisitasRueda';
+    fetch(url, {cache:'no-store'}).then(function(r){ if (!r.ok) throw 0; return r.text(); }).then(function(text){
+      visitasData = parseVisitasCSV(text);
+      localStorage.setItem(LS_VISITAS, JSON.stringify(visitasData));
+      if (showToast) toast('Visitas y ruedas actualizadas');
+    }).catch(function(){});
+  }
+
+  function visitaStripHtml(fecha){
+    var rows = visitasData.filter(function(v){ return v.fecha === fecha; });
+    if (!rows.length) return '';
+    return '<div class="dvstrip">' + rows.map(function(v){
+      var r = v.tipo === 'Rueda';
+      var k = r ? 'r' : 'v';
+      return '<div class="dvrow">' +
+        '<span class="dvc ' + k + '1">' + escapeHtml(v.tipo || 'Visita') + '</span>' +
+        (v.cargo ? '<span class="dvc ' + k + '2">' + escapeHtml(v.cargo) + '</span>' : '') +
+        '<span class="dvc ' + k + '3">' + escapeHtml(v.nombre) + '</span>' +
+        (r && v.lugar ? '<span class="dvc r4">' + escapeHtml(v.lugar) + '</span>' : '') +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  // ---------- Estadísticas de visitas y ruedas ----------
+  var statsYear = '';
+  var statsMonth = 'all';
+  var statsTipo = 'todo'; // todo | Visita | Rueda
+  var lastStats = null;
+  var MESES_ES_ = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  function attendanceByDate(){
+    var map = {};
+    state.data.forEach(function(p){
+      parseAsistenciaHistorial(p.asistenciaHistorial).forEach(function(en){
+        var c = (en.codigo || '').toUpperCase();
+        map[en.fecha] = map[en.fecha] || { P: 0, A: 0 };
+        if (c === 'P') map[en.fecha].P++;
+        if (c === 'A') map[en.fecha].A++;
+      });
+    });
+    return map;
+  }
+
+  function statsInPeriod(fecha){
+    var parts = (fecha || '').split('/');
+    if (parts.length !== 3) return false;
+    if (String(2000 + parseInt(parts[2], 10)) !== statsYear) return false;
+    if (statsMonth !== 'all' && parseInt(parts[1], 10) !== parseInt(statsMonth, 10)) return false;
+    return true;
+  }
+
+  function avg(list){
+    if (!list.length) return null;
+    var t = 0; list.forEach(function(x){ t += x; });
+    return Math.round(t / list.length);
+  }
+
+  function computeStats(){
+    var att = attendanceByDate();
+    var inPeriodRows = visitasData.filter(function(v){ return statsInPeriod(v.fecha); });
+    var anyDates = {};
+    inPeriodRows.forEach(function(v){ anyDates[v.fecha] = true; });
+
+    var rows = inPeriodRows.filter(function(v){ return statsTipo === 'todo' || v.tipo === statsTipo; });
+    var events = {};
+    rows.forEach(function(v){
+      var key = v.fecha + '|' + v.tipo;
+      events[key] = events[key] || { fecha: v.fecha, tipo: v.tipo, sd: v.sd, siervos: [] };
+      events[key].siervos.push({ nombre: v.nombre, cargo: v.cargo, lugar: v.lugar });
+    });
+    var fechas = Object.keys(events).map(function(k){
+      var e = events[k], a = att[e.fecha] || { P: 0, A: 0 };
+      return { fecha: e.fecha, sd: e.sd, tipo: e.tipo, p: a.P, a: a.A, siervos: e.siervos };
+    }).sort(function(x, y){ return parseHistDate_(y.fecha) - parseHistDate_(x.fecha); });
+
+    var ruedas = fechas.filter(function(f){ return f.tipo === 'Rueda'; }).length;
+    var visitas = fechas.filter(function(f){ return f.tipo !== 'Rueda'; }).length;
+
+    var conDates = {};
+    fechas.forEach(function(f){ conDates[f.fecha] = true; });
+    var conList = Object.keys(conDates).filter(function(d){ return att[d]; }).map(function(d){ return att[d].P; });
+    var sinList = Object.keys(att).filter(function(d){ return statsInPeriod(d) && !anyDates[d] && att[d].P > 0; }).map(function(d){ return att[d].P; });
+
+    var sMap = {};
+    rows.forEach(function(v){
+      var k = v.nombre + '|' + v.cargo;
+      sMap[k] = sMap[k] || { nombre: v.nombre, cargo: v.cargo, count: 0 };
+      sMap[k].count++;
+    });
+    var siervos = Object.keys(sMap).map(function(k){ return sMap[k]; }).sort(function(a, b){ return b.count - a.count; });
+
+    var lMap = {};
+    rows.forEach(function(v){
+      if (v.tipo !== 'Rueda' || !v.lugar) return;
+      lMap[v.lugar] = (lMap[v.lugar] || 0) + 1;
+    });
+    var lugares = Object.keys(lMap).map(function(k){ return { lugar: k, count: lMap[k] }; }).sort(function(a, b){ return b.count - a.count; });
+
+    var espMap = {};
+    fechas.forEach(function(f){
+      if (!/navidad|difuntos|agradecimiento/i.test(f.sd || '')) return;
+      espMap[f.sd] = espMap[f.sd] || { sd: f.sd, visitas: 0, ruedas: 0 };
+      if (f.tipo === 'Rueda') espMap[f.sd].ruedas++; else espMap[f.sd].visitas++;
+    });
+    var especiales = Object.keys(espMap).map(function(k){ return espMap[k]; });
+
+    var periodo = statsYear + (statsMonth !== 'all' ? ' · ' + MESES_ES_[parseInt(statsMonth, 10) - 1] : '');
+    var tipoTxt = statsTipo === 'todo' ? 'Todo' : (statsTipo === 'Rueda' ? 'Ruedas' : 'Visitas');
+    return {
+      titulo: 'Estadísticas de visitas y ruedas',
+      subtitulo: periodo + ' · ' + tipoTxt,
+      ruedas: ruedas, visitas: visitas,
+      promCon: avg(conList), promSin: avg(sinList),
+      fechas: fechas, siervos: siervos, lugares: lugares, especiales: especiales
+    };
+  }
+
+  function renderStatsBody(){
+    var st = computeStats();
+    lastStats = st;
+    if (!st.fechas.length){
+      document.getElementById('statsBody').innerHTML = '<p class="vae-history-empty">No hay visitas ni ruedas registradas en este período.</p>';
+      return;
+    }
+    var out = '<div class="st-kpis">' +
+      '<div class="st-kpi"><b>' + st.ruedas + '</b><span>Ruedas</span></div>' +
+      '<div class="st-kpi"><b>' + st.visitas + '</b><span>Visitas</span></div>' +
+      '<div class="st-kpi"><b>' + (st.promCon === null ? '–' : st.promCon) + '</b><span>Presentes promedio con visita o rueda</span></div>' +
+      '<div class="st-kpi"><b>' + (st.promSin === null ? '–' : st.promSin) + '</b><span>Presentes promedio sin visita ni rueda</span></div>' +
+    '</div>';
+
+    out += '<p class="st-sec">Fechas</p><table class="st-tb"><tr><th>Fecha</th><th>Tipo</th><th class="n">P</th><th class="n">A</th></tr>' +
+      st.fechas.map(function(f){
+        return '<tr><td>' + escapeHtml(f.fecha) + (f.sd ? '<span class="st-names">' + escapeHtml(f.sd) + '</span>' : '') + '</td>' +
+          '<td>' + escapeHtml(f.tipo) + '<span class="st-names">' + f.siervos.map(function(sv){ return escapeHtml(sv.nombre + (sv.cargo ? ' (' + sv.cargo + ')' : '') + (sv.lugar ? ' · ' + sv.lugar : '')); }).join('<br>') + '</span></td>' +
+          '<td class="n">' + f.p + '</td><td class="n">' + f.a + '</td></tr>';
+      }).join('') + '</table>';
+
+    out += '<p class="st-sec">Siervos que más nos visitaron</p><table class="st-tb">' +
+      st.siervos.map(function(sv){
+        return '<tr><td>' + escapeHtml(sv.nombre) + (sv.cargo ? ' · ' + escapeHtml(sv.cargo) : '') + '</td><td class="n">' + sv.count + '</td></tr>';
+      }).join('') + '</table>';
+
+    if (st.lugares.length){
+      var max = st.lugares[0].count;
+      out += '<p class="st-sec">Lugares de procedencia (rueda)</p><table class="st-tb">' +
+        st.lugares.map(function(l){
+          return '<tr><td>' + escapeHtml(l.lugar) + '</td><td style="width:40%;"><div class="st-bar"><i style="width:' + Math.round(l.count / max * 100) + '%"></i></div></td><td class="n">' + l.count + '</td></tr>';
+        }).join('') + '</table>';
+    }
+
+    if (st.especiales.length){
+      out += '<p class="st-sec">Con sermón especial</p><table class="st-tb">' +
+        st.especiales.map(function(e){
+          return '<tr><td>' + escapeHtml(e.sd) + '</td><td class="n">' + e.visitas + ' visita(s) · ' + e.ruedas + ' rueda(s)</td></tr>';
+        }).join('') + '</table>';
+    }
+    document.getElementById('statsBody').innerHTML = out;
+  }
+
+  function renderStatsControls(){
+    var years = {};
+    var thisYear = String(new Date().getFullYear());
+    years[thisYear] = true;
+    visitasData.forEach(function(v){
+      var parts = (v.fecha || '').split('/');
+      if (parts.length === 3) years[String(2000 + parseInt(parts[2], 10))] = true;
+    });
+    var list = Object.keys(years).sort().reverse();
+    if (!statsYear || !years[statsYear]) statsYear = list[0];
+    document.getElementById('statsYearPills').innerHTML = list.map(function(y){
+      return '<button type="button" class="st-pill' + (y === statsYear ? ' active' : '') + '" data-year="' + y + '">' + y + '</button>';
+    }).join('');
+    document.getElementById('statsMonthSelect').innerHTML = '<option value="all">Todo el año</option>' +
+      MESES_ES_.map(function(m, i){ return '<option value="' + (i + 1) + '"' + (String(i + 1) === String(statsMonth) ? ' selected' : '') + '>' + m + '</option>'; }).join('');
+    document.getElementById('statsMonthSelect').value = String(statsMonth);
+    document.getElementById('statsTipoPills').innerHTML = [['todo','Todo'],['Visita','Visitas'],['Rueda','Ruedas']].map(function(t){
+      return '<button type="button" class="st-pill' + (statsTipo === t[0] ? ' active' : '') + '" data-tipo="' + t[0] + '">' + t[1] + '</button>';
+    }).join('');
+  }
+
+  function openStatsOverlay(){
+    syncVisitasFromUrl(false);
+    renderStatsControls();
+    renderStatsBody();
+    document.getElementById('statsOverlay').classList.add('show');
+    // refresca cuando termina la sincronización
+    setTimeout(function(){ renderStatsControls(); renderStatsBody(); }, 1500);
+  }
+  document.getElementById('statsYearPills').addEventListener('click', function(e){
+    var b = e.target.closest('.st-pill'); if (!b) return;
+    statsYear = b.getAttribute('data-year'); renderStatsControls(); renderStatsBody();
+  });
+  document.getElementById('statsTipoPills').addEventListener('click', function(e){
+    var b = e.target.closest('.st-pill'); if (!b) return;
+    statsTipo = b.getAttribute('data-tipo'); renderStatsControls(); renderStatsBody();
+  });
+  document.getElementById('statsMonthSelect').addEventListener('change', function(){
+    statsMonth = this.value; renderStatsControls(); renderStatsBody();
+  });
+  document.getElementById('statsCloseBtn').addEventListener('click', function(){
+    document.getElementById('statsOverlay').classList.remove('show');
+  });
+  document.getElementById('statsSendBtn').addEventListener('click', function(){
+    var scriptUrl = localStorage.getItem(LS_SCRIPT_URL);
+    if (!scriptUrl){ toast('No configuraste el link del Apps Script todavía'); return; }
+    if (!lastStats || !lastStats.fechas.length){ toast('No hay datos para enviar en este período'); return; }
+    var btn = this;
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    fetch(scriptUrl, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'sendStats', stats: lastStats })
+    }).then(function(r){ return r.json(); }).then(function(res){
+      btn.disabled = false; btn.textContent = 'Enviar por mail';
+      toast(res && res.ok ? 'Estadísticas enviadas por mail' : 'No se pudo enviar el mail');
+    }).catch(function(){
+      btn.disabled = false; btn.textContent = 'Enviar por mail';
+      toast('Sin conexión');
+    });
+  });
+
   function renderMonthDetail(mk){
     var byDate = {};
     state.data.forEach(function(p){
@@ -1232,6 +1515,7 @@
             '<span class="date-accordion-count">' + escapeHtml(summary) + '</span>' +
           '</span>' +
         '</button>' +
+        visitaStripHtml(fecha) +
         '<div class="date-accordion-body" style="display:none;">' + codeSections + '</div>' +
       '</div>';
     }).join('');
@@ -1398,6 +1682,8 @@
     if (openEntry){ openEntryOverlay('general'); return; }
     var openEntryJuv = e.target.closest('#openEntryJuventudBtn');
     if (openEntryJuv){ openEntryOverlay('juventud'); return; }
+    var openStats = e.target.closest('#openStatsBtn');
+    if (openStats){ openStatsOverlay(); return; }
     var openVae = e.target.closest('#openVaeBtn');
     if (openVae){ openVaeOverlay(); return; }
   });
@@ -1713,6 +1999,7 @@
       btn.textContent = '✅ Finalizar carga';
       if (res && res.ok){
         toast('Carga finalizada, mail enviado');
+        setTimeout(function(){ syncVisitasFromUrl(false); }, 1500);
         closeEntryOverlay();
       } else {
         toast(res && res.error ? res.error : 'No se pudo enviar el mail');
@@ -1969,7 +2256,8 @@
       countLine.textContent = state.data.length + ' almas en el directorio · escribí para buscar';
       container.innerHTML = '<button type="button" class="btn btn-primary" id="openEntryBtn" style="margin-bottom:10px;">📋 Cargar Asistencia</button>' +
         '<button type="button" class="btn btn-outline" id="openEntryJuventudBtn" style="margin-bottom:14px;">🎤 Sermón de Juventud</button>' +
-        '<button type="button" class="btn btn-outline" id="openVaeBtn" style="margin-bottom:14px;">VAE</button>' +
+        '<button type="button" class="btn btn-outline" id="openVaeBtn" style="margin-bottom:10px;">VAE</button>' +
+        '<button type="button" class="btn btn-outline" id="openStatsBtn" style="margin-bottom:14px;">Estadísticas</button>' +
         renderActiveDateTotal() + renderBirthdaysCard() + renderCongregationSummary() + renderYearSummary();
       return;
     }
@@ -2921,7 +3209,7 @@
 
   document.getElementById('syncNowBtn').addEventListener('click', function(){
     localStorage.setItem(LS_SCRIPT_URL, document.getElementById('scriptUrlInput').value.trim());
-    syncFromUrl(true).then(function(){ syncVaeFromUrl(false); syncGrupoFamiliarFromUrl(false); syncAsistenciaFromUrl(false); });
+    syncFromUrl(true).then(function(){ syncVaeFromUrl(false); syncGrupoFamiliarFromUrl(false); syncAsistenciaFromUrl(false); syncVisitasFromUrl(false); });
   });
 
   document.getElementById('fileImportInput').addEventListener('change', function(e){
@@ -2981,7 +3269,7 @@
     populateSiervoFilter();
     renderResults();
     loadSeedIfEmpty();
-    syncFromUrl(false).then(function(){ syncVaeFromUrl(false); syncGrupoFamiliarFromUrl(false); syncAsistenciaFromUrl(false); });
+    syncFromUrl(false).then(function(){ syncVaeFromUrl(false); syncGrupoFamiliarFromUrl(false); syncAsistenciaFromUrl(false); syncVisitasFromUrl(false); });
 
     var users = getUsers();
     if (Object.keys(users).length > 0){
