@@ -261,6 +261,17 @@
   .pchip-ju{background:var(--navy);color:#fff;border-color:var(--navy);text-shadow:0 0 2px #000;}
   .pchip-ni{background:#fdf1dc;color:#7a4b0c;border-color:#efc983;}
   .pchip-ta{background:var(--paper);color:var(--ink-soft);}
+  .home-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .home-tile{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    min-height:68px;padding:10px 6px;border-radius:12px;border:1px solid var(--line);
+    background:var(--card);color:var(--navy);font-family:inherit;font-weight:700;font-size:13px;
+    line-height:1.25;text-align:center;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .home-tile:active{background:var(--paper);}
+  .home-tile svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;}
+  .home-tile.primary{background:var(--navy);border-color:var(--navy);color:#fff;text-shadow:0 0 2px #000,0 1px 2px #000;}
+  .home-tile.primary:active{background:var(--navy-2);}
   .dvstrip{padding:0 14px 10px;background:#fafbfc;display:flex;flex-direction:column;gap:6px;}
   .dvrow{display:flex;flex-wrap:wrap;gap:6px;}
   .dvc{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid transparent;}
@@ -578,7 +589,7 @@
 <div class="overlay" id="entryOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2 id="entryOverlayTitle">Cargar asistencia</h2>
+    <h2 id="entryOverlayTitle">Asistencia Comunidad</h2>
 
     <div class="field-block">
       <label>Fecha</label>
@@ -589,6 +600,7 @@
     </div>
 
     <div id="entryVisitaInfo" class="vae-sel-card" style="display:none;"></div>
+    <div id="entryComunidadInfo" class="vae-sel-card" style="display:none;"></div>
 
     <div class="field-block" id="entryTipoBlock">
       <label>Tipo de SD</label>
@@ -648,10 +660,43 @@
   </div>
 </div>
 
+<div class="overlay" id="juvMenuOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Juventud</h2>
+    <button class="btn btn-primary" id="juvMenuCargaBtn" style="margin-bottom:10px;">Carga Asistencia</button>
+    <button class="btn btn-outline" id="juvMenuStatsBtn" style="margin-bottom:10px;">Estadísticas</button>
+    <div class="divider"></div>
+    <button class="btn btn-outline" id="juvMenuCloseBtn">Cerrar</button>
+  </div>
+</div>
+
+<div class="overlay" id="comunidadOverlay">
+  <div class="sheet" style="max-width:340px;">
+    <p style="font-size:17px;font-weight:700;margin:0 0 6px;color:var(--ink);text-align:center;">Ingresá la comunidad del Servicio Divino</p>
+    <p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px;line-height:1.5;text-align:center;">Es obligatorio para cargar la asistencia.</p>
+    <input type="text" id="comunidadInput" placeholder="Escribí la comunidad" autocomplete="off" style="display:block;width:100%;box-sizing:border-box;">
+    <p id="comunidadMsg" class="help-text" style="color:var(--danger);display:none;margin:8px 0 0;text-align:center;">Escribí la comunidad para continuar.</p>
+    <button class="btn btn-primary" id="comunidadContinueBtn" style="margin-top:14px;opacity:.45;">Continuar</button>
+  </div>
+</div>
+
+<div class="overlay" id="juvStatsOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Estadísticas de Juventud</h2>
+    <div id="juvStatsYearPills" class="st-pills"></div>
+    <select id="juvStatsMonthSelect" style="margin-bottom:8px;"></select>
+    <div id="juvStatsBody"></div>
+    <div class="divider"></div>
+    <button class="btn btn-outline" id="juvStatsCloseBtn">Cerrar</button>
+  </div>
+</div>
+
 <div class="overlay" id="statsOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2>Estadísticas</h2>
+    <h2>Estadísticas Comunidad</h2>
     <div id="statsYearPills" class="st-pills"></div>
     <select id="statsMonthSelect" style="margin-bottom:8px;"></select>
     <div id="statsTipoPills" class="st-pills"></div>
@@ -1692,7 +1737,7 @@
     var openEntry = e.target.closest('#openEntryBtn');
     if (openEntry){ openEntryOverlay('general'); return; }
     var openEntryJuv = e.target.closest('#openEntryJuventudBtn');
-    if (openEntryJuv){ openEntryOverlay('juventud'); return; }
+    if (openEntryJuv){ document.getElementById('juvMenuOverlay').classList.add('show'); return; }
     var openStats = e.target.closest('#openStatsBtn');
     if (openStats){ openStatsOverlay(); return; }
     var openVae = e.target.closest('#openVaeBtn');
@@ -1744,6 +1789,191 @@
     }).join('') + '<button type="button" class="entry-date-btn" data-kind="other">Otra fecha</button>';
     selectEntryDateKind(options[0].kind, options[0].date);
   }
+
+  // ---------- Info Juventud: menú, comunidad del SD y estadísticas ----------
+  var entryComunidad = '';
+
+  function renderEntryComunidadInfo(){
+    var box = document.getElementById('entryComunidadInfo');
+    if (entryMode !== 'juventud' || !entryComunidad){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'block';
+    box.innerHTML = '<p class="vae-sel-name">' + escapeHtml(entryComunidad) + '</p>' +
+      '<p class="vae-sel-last">Comunidad del Servicio Divino</p>' +
+      '<button type="button" class="vae-history-toggle" id="comunidadEditBtn" style="margin-top:6px;">Editar</button>';
+  }
+  document.getElementById('entryComunidadInfo').addEventListener('click', function(e){
+    if (e.target.closest('#comunidadEditBtn')) openComunidadPopup();
+  });
+
+  function openComunidadPopup(){
+    var inp = document.getElementById('comunidadInput');
+    inp.value = entryComunidad || '';
+    inp.style.borderColor = '';
+    document.getElementById('comunidadMsg').style.display = 'none';
+    document.getElementById('comunidadContinueBtn').style.opacity = inp.value.trim() ? '1' : '.45';
+    document.getElementById('comunidadOverlay').classList.add('show');
+    setTimeout(function(){ inp.focus(); }, 50);
+  }
+  document.getElementById('comunidadInput').addEventListener('input', function(){
+    var ok = !!this.value.trim();
+    document.getElementById('comunidadContinueBtn').style.opacity = ok ? '1' : '.45';
+    if (ok){ this.style.borderColor = ''; document.getElementById('comunidadMsg').style.display = 'none'; }
+  });
+  document.getElementById('comunidadInput').addEventListener('keydown', function(e){
+    if (e.key === 'Enter'){ e.preventDefault(); document.getElementById('comunidadContinueBtn').click(); }
+  });
+  document.getElementById('comunidadContinueBtn').addEventListener('click', function(){
+    var inp = document.getElementById('comunidadInput');
+    var v = inp.value.replace(/\s+/g, ' ').trim();
+    if (!v){
+      inp.style.borderColor = '#c0392b';
+      document.getElementById('comunidadMsg').style.display = 'block';
+      return;
+    }
+    entryComunidad = v;
+    document.getElementById('comunidadOverlay').classList.remove('show');
+    renderEntryComunidadInfo();
+    setTimeout(function(){ document.getElementById('entrySearchInput').focus(); }, 50);
+  });
+
+  document.getElementById('juvMenuCloseBtn').addEventListener('click', function(){
+    document.getElementById('juvMenuOverlay').classList.remove('show');
+  });
+  document.getElementById('juvMenuCargaBtn').addEventListener('click', function(){
+    document.getElementById('juvMenuOverlay').classList.remove('show');
+    openEntryOverlay('juventud');
+  });
+  document.getElementById('juvMenuStatsBtn').addEventListener('click', function(){
+    document.getElementById('juvMenuOverlay').classList.remove('show');
+    openJuvStats();
+  });
+
+  // Estadísticas de Juventud (hoja AsistenciaJuventud)
+  var LS_JUV = 'directorio_juventud_asistencia';
+  var juvData = [];
+  try { juvData = JSON.parse(localStorage.getItem(LS_JUV) || '[]'); } catch(e){ juvData = []; }
+  var juvYear = '';
+  var juvMonth = 'all';
+
+  function parseJuvCSV(text){
+    if (!text || /^Hoja no encontrada/.test(text)) return [];
+    return csvToObjects(text).map(function(o){
+      return {
+        fecha: (o['fecha'] || '').toString().trim(),
+        apellido: (o['apellido'] || '').toString().trim(),
+        nombre: (o['nombre'] || '').toString().trim(),
+        codigo: (o['codigo'] || '').toString().trim().toUpperCase(),
+        comunidad: (o['comunidad'] || '').toString().trim()
+      };
+    }).filter(function(r){ return r.fecha && r.codigo; });
+  }
+
+  function syncJuvFromUrl(cb){
+    var scriptUrl = localStorage.getItem(LS_SCRIPT_URL);
+    if (!scriptUrl){ if (cb) cb(); return; }
+    var url = scriptUrl + (scriptUrl.indexOf('?') === -1 ? '?' : '&') + 'sheet=AsistenciaJuventud';
+    fetch(url, {cache:'no-store'}).then(function(r){ if (!r.ok) throw 0; return r.text(); }).then(function(text){
+      juvData = parseJuvCSV(text);
+      localStorage.setItem(LS_JUV, JSON.stringify(juvData));
+      if (cb) cb();
+    }).catch(function(){ if (cb) cb(); });
+  }
+
+  function juvInPeriod(fecha){
+    var parts = (fecha || '').split('/');
+    if (parts.length !== 3) return false;
+    if (String(2000 + parseInt(parts[2], 10)) !== juvYear) return false;
+    if (juvMonth !== 'all' && parseInt(parts[1], 10) !== parseInt(juvMonth, 10)) return false;
+    return true;
+  }
+
+  function renderJuvControls(){
+    var years = {};
+    years[String(new Date().getFullYear())] = true;
+    juvData.forEach(function(r){
+      var parts = r.fecha.split('/');
+      if (parts.length === 3) years[String(2000 + parseInt(parts[2], 10))] = true;
+    });
+    var list = Object.keys(years).sort().reverse();
+    if (!juvYear || !years[juvYear]) juvYear = list[0];
+    document.getElementById('juvStatsYearPills').innerHTML = list.map(function(y){
+      return '<button type="button" class="st-pill' + (y === juvYear ? ' active' : '') + '" data-year="' + y + '">' + y + '</button>';
+    }).join('');
+    document.getElementById('juvStatsMonthSelect').innerHTML = '<option value="all">Todo el año</option>' +
+      MESES_ES_.map(function(m, i){ return '<option value="' + (i + 1) + '">' + m + '</option>'; }).join('');
+    document.getElementById('juvStatsMonthSelect').value = String(juvMonth);
+  }
+
+  function renderJuvBody(){
+    var rows = juvData.filter(function(r){ return juvInPeriod(r.fecha); });
+    var box = document.getElementById('juvStatsBody');
+    if (!rows.length){
+      box.innerHTML = '<p class="vae-history-empty">No hay asistencia de Juventud cargada en este período.</p>';
+      return;
+    }
+    var byDate = {};
+    rows.forEach(function(r){
+      byDate[r.fecha] = byDate[r.fecha] || { fecha: r.fecha, p: 0, a: 0, otros: 0, comunidad: '' };
+      if (r.codigo === 'P') byDate[r.fecha].p++;
+      else if (r.codigo === 'A') byDate[r.fecha].a++;
+      else byDate[r.fecha].otros++;
+      if (r.comunidad) byDate[r.fecha].comunidad = r.comunidad;
+    });
+    var fechas = Object.keys(byDate).map(function(k){ return byDate[k]; })
+      .sort(function(x, y){ return parseHistDate_(y.fecha) - parseHistDate_(x.fecha); });
+    var totalP = 0; fechas.forEach(function(f){ totalP += f.p; });
+    var prom = Math.round(totalP / fechas.length);
+
+    var pers = {};
+    rows.forEach(function(r){
+      var k = r.apellido + ', ' + r.nombre;
+      pers[k] = pers[k] || { nombre: k, p: 0, total: 0 };
+      pers[k].total++;
+      if (r.codigo === 'P') pers[k].p++;
+    });
+    var ranking = Object.keys(pers).map(function(k){ return pers[k]; })
+      .sort(function(a, b){ return b.p - a.p || a.nombre.localeCompare(b.nombre); });
+
+    var comMap = {};
+    fechas.forEach(function(f){ if (f.comunidad) comMap[f.comunidad] = (comMap[f.comunidad] || 0) + 1; });
+    var comunidades = Object.keys(comMap).map(function(k){ return { c: k, n: comMap[k] }; }).sort(function(a, b){ return b.n - a.n; });
+
+    var out = '<div class="st-kpis">' +
+      '<div class="st-kpi"><b>' + fechas.length + '</b><span>Fechas cargadas</span></div>' +
+      '<div class="st-kpi"><b>' + prom + '</b><span>Presentes promedio</span></div>' +
+    '</div>';
+    out += '<p class="st-sec">Fechas</p><table class="st-tb"><tr><th>Fecha</th><th class="n">P</th><th class="n">A</th><th class="n">Otros</th></tr>' +
+      fechas.map(function(f){
+        return '<tr><td>' + escapeHtml(f.fecha) + (f.comunidad ? '<span class="st-names">' + escapeHtml(f.comunidad) + '</span>' : '') + '</td>' +
+          '<td class="n">' + f.p + '</td><td class="n">' + f.a + '</td><td class="n">' + f.otros + '</td></tr>';
+      }).join('') + '</table>';
+    out += '<p class="st-sec">Asistencia por persona</p><table class="st-tb"><tr><th>Persona</th><th class="n">Presente</th></tr>' +
+      ranking.map(function(r){
+        return '<tr><td>' + escapeHtml(r.nombre) + '</td><td class="n">' + r.p + ' de ' + r.total + '</td></tr>';
+      }).join('') + '</table>';
+    if (comunidades.length){
+      out += '<p class="st-sec">Comunidad del Servicio Divino</p><table class="st-tb">' +
+        comunidades.map(function(c){ return '<tr><td>' + escapeHtml(c.c) + '</td><td class="n">' + c.n + '</td></tr>'; }).join('') + '</table>';
+    }
+    box.innerHTML = out;
+  }
+
+  function openJuvStats(){
+    renderJuvControls();
+    renderJuvBody();
+    document.getElementById('juvStatsOverlay').classList.add('show');
+    syncJuvFromUrl(function(){ renderJuvControls(); renderJuvBody(); });
+  }
+  document.getElementById('juvStatsYearPills').addEventListener('click', function(e){
+    var b = e.target.closest('.st-pill'); if (!b) return;
+    juvYear = b.getAttribute('data-year'); renderJuvControls(); renderJuvBody();
+  });
+  document.getElementById('juvStatsMonthSelect').addEventListener('change', function(){
+    juvMonth = this.value; renderJuvBody();
+  });
+  document.getElementById('juvStatsCloseBtn').addEventListener('click', function(){
+    document.getElementById('juvStatsOverlay').classList.remove('show');
+  });
 
   // ---------- Visita / Rueda ----------
   var entryVisita = null; // { tipo: 'Visita'|'Rueda', personas: [{nombre, cargo, lugar}] }
@@ -1942,10 +2172,10 @@
 
   function openEntryOverlay(mode){
     entryMode = mode === 'juventud' ? 'juventud' : 'general';
-    entryTipoKey = 'sd'; entryNavidadConfirmed = false; entryVisita = null;
+    entryTipoKey = 'sd'; entryNavidadConfirmed = false; entryVisita = null; entryComunidad = '';
     document.getElementById('entryOverlayTitle').textContent = entryMode === 'juventud'
-      ? '🎤 Sermón de Juventud'
-      : 'Cargar asistencia';
+      ? 'Juventud · Carga de asistencia'
+      : 'Asistencia Comunidad';
     document.getElementById('entryCustomDateInput').value = todayForDateInput_();
     renderEntryDateOptions();
     document.getElementById('entrySearchInput').value = '';
@@ -1956,11 +2186,12 @@
     entrySelectedCodes = {};
     entrySessionSaves = [];
     renderEntryVisitaInfo();
+    renderEntryComunidadInfo();
     document.getElementById('entryOverlay').classList.add('show');
     if (entryMode === 'general'){
       document.getElementById('visitaChoiceOverlay').classList.add('show');
     } else {
-      setTimeout(function(){ document.getElementById('entrySearchInput').focus(); }, 50);
+      openComunidadPopup();
     }
   }
   function closeEntryOverlay(){
@@ -1971,6 +2202,7 @@
 
   document.getElementById('finalizeEntryBtn').addEventListener('click', function(){
     if (!entrySelectedDate || !entrySelectedDate.fecha){ toast('Elegí una fecha válida'); return; }
+    if (entryMode === 'juventud' && !entryComunidad){ openComunidadPopup(); return; }
     if (entryTipoBlocks()) return;
     document.getElementById('finalizeConfirmOverlay').classList.add('show');
   });
@@ -2003,7 +2235,8 @@
         fecha: entrySelectedDate.fecha,
         label: (entryMode === 'juventud' ? '' : (entrySelectedDate.tipo || '')) || entrySelectedDate.label || '',
         comentario: entrySelectedDate.comentario || '',
-        visita: (entryMode === 'general' && entryVisita) ? entryVisita : null
+        visita: (entryMode === 'general' && entryVisita) ? entryVisita : null,
+        comunidad: entryMode === 'juventud' ? entryComunidad : ''
       })
     }).then(function(r){ return r.json(); }).then(function(res){
       btn.disabled = false;
@@ -2120,6 +2353,7 @@
 
   document.getElementById('saveEntryBtn').addEventListener('click', function(){
     if (!entrySelectedDate || !entrySelectedDate.fecha){ toast('Elegí una fecha válida'); return; }
+    if (entryMode === 'juventud' && !entryComunidad){ openComunidadPopup(); return; }
     if (entryTipoBlocks()) return;
     var fecha = entrySelectedDate.fecha;
     var comentario = entrySelectedDate.comentario || '';
@@ -2142,7 +2376,8 @@
       headers: {'Content-Type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({
         action: entryMode === 'juventud' ? 'saveAsistenciaJuventud' : 'saveAsistencia',
-        fecha: fecha, comentario: comentario, entries: entries
+        fecha: fecha, comentario: comentario, entries: entries,
+        comunidad: entryMode === 'juventud' ? entryComunidad : ''
       })
     }).then(function(r){ return r.json(); }).then(function(res){
       btn.disabled = false;
@@ -2177,6 +2412,14 @@
   });
 
   // ---------- Rendering ----------
+  var HOME_ICONS_ = {
+    clip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2"/><path d="M9 3m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2z"/><path d="M9 14l2 2l4 -4"/></svg>',
+    chart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"/><path d="M15 9a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"/><path d="M9 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z"/><path d="M4 20h14"/></svg>',
+    house: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12l-9 -9l-9 9h2v7a2 2 0 0 0 2 2h6"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2c.39 0 .754 .112 1.061 .304"/><path d="M19 21.5l2.518 -2.58a1.74 1.74 0 0 0 0 -2.413a1.627 1.627 0 0 0 -2.346 0l-.168 .172l-.168 -.172a1.627 1.627 0 0 0 -2.346 0a1.74 1.74 0 0 0 0 2.412l2.51 2.59z"/></svg>',
+    users: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/></svg>'
+  };
+
+
   function renderResults(){
     var container = document.getElementById('results');
     var countLine = document.getElementById('countLine');
@@ -2265,10 +2508,12 @@
 
     if (!state.query){
       countLine.textContent = state.data.length + ' almas en el directorio · escribí para buscar';
-      container.innerHTML = '<button type="button" class="btn btn-primary" id="openEntryBtn" style="margin-bottom:10px;">📋 Cargar Asistencia</button>' +
-        '<button type="button" class="btn btn-outline" id="openEntryJuventudBtn" style="margin-bottom:14px;">🎤 Sermón de Juventud</button>' +
-        '<button type="button" class="btn btn-outline" id="openVaeBtn" style="margin-bottom:10px;">VAE</button>' +
-        '<button type="button" class="btn btn-outline" id="openStatsBtn" style="margin-bottom:14px;">Estadísticas</button>' +
+      container.innerHTML = '<div class="home-tiles">' +
+          '<button type="button" class="home-tile primary" id="openEntryBtn">' + HOME_ICONS_.clip + '<span>Asistencia<br>Comunidad</span></button>' +
+          '<button type="button" class="home-tile" id="openStatsBtn">' + HOME_ICONS_.chart + '<span>Estadísticas<br>Comunidad</span></button>' +
+          '<button type="button" class="home-tile" id="openVaeBtn">' + HOME_ICONS_.house + '<span>VAE</span></button>' +
+          '<button type="button" class="home-tile" id="openEntryJuventudBtn">' + HOME_ICONS_.users + '<span>Juventud</span></button>' +
+        '</div>' +
         renderActiveDateTotal() + renderBirthdaysCard() + renderCongregationSummary() + renderYearSummary();
       return;
     }
