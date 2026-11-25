@@ -2017,7 +2017,7 @@
     '</div>';
     out += '<p class="st-sec">Fechas</p><table class="st-tb"><tr><th>Fecha</th><th class="n">P</th><th class="n">A</th><th class="n">Otros</th></tr>' +
       fechas.map(function(f){
-        return '<tr><td>' + escapeHtml(f.fecha) + (f.comunidad ? '<span class="st-names">' + escapeHtml(f.comunidad) + '</span>' : '') + '</td>' +
+        return '<tr><td>' + escapeHtml(f.fecha) + (f.comunidad ? ' (' + escapeHtml(f.comunidad) + ')' : '') + '</td>' +
           '<td class="n">' + f.p + '</td><td class="n">' + f.a + '</td><td class="n">' + f.otros + '</td></tr>';
       }).join('') + '</table>';
     out += '<p class="st-sec">Asistencia por persona</p><table class="st-tb"><tr><th>Persona</th><th class="n">Presente</th></tr>' +
